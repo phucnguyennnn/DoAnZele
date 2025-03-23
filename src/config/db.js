@@ -2,12 +2,12 @@ const mongoose = require("mongoose");
 
 const connectDB = async () => {
   try {
-    const mongoURI = process.env.MONGO_URI; // Lấy URI từ biến môi trường
+    const mongoURI = process.env.MONGO_URI;
     await mongoose.connect(mongoURI);
     console.log("MongoDB Atlas connected");
   } catch (err) {
     console.error(err);
-    process.exit(1); // Dừng ứng dụng nếu kết nối không thành công
+    process.exit(1);
   }
 };
 
