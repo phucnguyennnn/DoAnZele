@@ -3,6 +3,7 @@ const generateOTP = require("../utils/generateOTP");
 const bcrypt = require("bcryptjs");
 const transporter = require("../config/email");
 const handleValidationError = require("../utils/errorHandler");
+const { generateToken } = require("../utils/jwt");
 
 class AuthService {
   static async registerUser(phone, email, name, password) {
@@ -57,6 +58,29 @@ class AuthService {
     } catch (error) {
       throw new Error(handleValidationError(error));
     }
+  }
+
+  static async loginUser(email, password) {
+    const user = await UserRepository.findUserByEmail(email);
+    if (!user) {
+      throw new Error("Người dùng không tồn tại!");
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password_hash);
+    if (!isMatch) {
+      throw new Error("Mật khẩu không chính xác!");
+    }
+
+    const accessToken = generateToken(user._id);
+
+    // Chỉ gửi thông tin cần thiết của người dùng
+    const userToSend = {
+      _id: user._id,
+      email: user.email,
+      name: user.name,
+    };
+
+    return { user: userToSend, accessToken };
   }
 
   static async resendOTP(email) {
