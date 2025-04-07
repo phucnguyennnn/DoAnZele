@@ -96,7 +96,6 @@ class AuthService {
     // Tạo OTP mới
     const otp = generateOTP();
     const otpExpiry = new Date(Date.now() + 1 * 60 * 1000); // OTP hết hạn sau 1 phút
-    const otpSentAt = new Date(); // Lưu thời điểm gửi OTP
 
     // Cập nhật OTP và thời điểm gửi OTP
     await UserRepository.updateUser(user._id, {

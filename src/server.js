@@ -4,6 +4,7 @@ const connectDB = require("./config/db");
 const authRoutes = require("../src/routes/authRoutes");
 const bodyParser = require("body-parser");
 const authMiddleware = require("../src/middlewares/authMiddleware");
+const userRoutes = require("../src/routes/UserRoutes"); // Import user routes
 
 dotenv.config();
 connectDB();
@@ -31,9 +32,12 @@ app.use((req, res, next) => {
 });
 
 app.use("/api/auth", authRoutes); // Đăng ký các route auth
+app.use("/api/user", userRoutes); // Đăng ký các route user
 
 // Middleware
 app.use(express.json());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
 app.listen(process.env.PORT, () => {
   console.log(`Server running on port ${process.env.PORT}`);

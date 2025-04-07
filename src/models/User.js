@@ -31,6 +31,14 @@ const UserSchema = new mongoose.Schema({
   password_reset_otp_expiry: Date,
   otp_verified: { type: Boolean, default: false },
   created_at: { type: Date, default: Date.now },
+  avatar_images: {
+    type: [String], // Array of image URLs
+    default: [], // Default is an empty array
+  },
+  primary_avatar: {
+    type: String, // URL of the primary avatar
+    default: null, // Default is null if no primary avatar is set
+  },
 });
 
 module.exports = mongoose.model("User", UserSchema);
