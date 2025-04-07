@@ -5,6 +5,8 @@ const {
   verifyOTP,
   resendOTP,
   loginUser,
+  forgotPassword,
+  resetPassword,
 } = require("../controllers/authController");
 
 // Đăng ký người dùng
@@ -18,6 +20,12 @@ router.post("/verify-otp", verifyOTP);
 
 // Gửi lại OTP
 router.post("/resend-otp", resendOTP);
+
+// Quên mật khẩu
+router.post("/forgot-password", forgotPassword);
+
+// Đặt lại mật khẩu
+router.post("/reset-password", resetPassword);
 
 // Route bảo vệ (ví dụ)
 router.get("/profile", (req, res) => {

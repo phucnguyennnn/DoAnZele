@@ -10,6 +10,7 @@ connectDB();
 
 const app = express();
 app.use(bodyParser.json()); // Phân tích body request
+app.use(bodyParser.urlencoded({ extended: true })); // Phân tích body request với urlencoded
 
 // Áp dụng middleware xác thực JWT cho tất cả các route trừ một số route nhất định
 app.use((req, res, next) => {
@@ -19,6 +20,8 @@ app.use((req, res, next) => {
     "/api/auth/login",
     "/api/auth/verify-otp",
     "/api/auth/resend-otp",
+    "/api/auth/forgot-password",
+    "/api/auth/reset-password",
   ];
   if (openRoutes.includes(req.path)) {
     return next();

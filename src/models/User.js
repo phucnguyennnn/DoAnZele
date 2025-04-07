@@ -25,9 +25,10 @@ const UserSchema = new mongoose.Schema({
     type: String,
     required: [true, "Vui lòng nhập mật khẩu"],
   },
-  otp: String,
-  otp_expiry: Date,
-  otp_sent_at: Date,
+  registration_otp: String,
+  registration_otp_expiry: Date,
+  password_reset_otp: String,
+  password_reset_otp_expiry: Date,
   otp_verified: { type: Boolean, default: false },
   created_at: { type: Date, default: Date.now },
 });

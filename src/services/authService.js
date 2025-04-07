@@ -4,6 +4,7 @@ const bcrypt = require("bcryptjs");
 const transporter = require("../config/email");
 const handleValidationError = require("../utils/errorHandler");
 const { generateToken } = require("../utils/jwt");
+const crypto = require("crypto");
 
 class AuthService {
   static async registerUser(phone, email, name, password) {
@@ -16,7 +17,7 @@ class AuthService {
     //   throw new Error("Email hoặc số điện thoại đã được đăng ký!");
     // }
 
-    // Tạo OTP
+    // Tạo OTP đăng ký
     const otp = generateOTP();
     const otpExpiry = new Date(Date.now() + 1 * 60 * 1000); // OTP hết hạn sau 1 phút
     const otpSentAt = new Date(); // Lưu thời điểm gửi OTP
@@ -35,9 +36,8 @@ class AuthService {
       email,
       name,
       password_hash: hashedPassword,
-      otp,
-      otp_expiry: otpExpiry,
-      otp_sent_at: otpSentAt,
+      registration_otp: otp,
+      registration_otp_expiry: otpExpiry,
     };
 
     try {
@@ -100,9 +100,8 @@ class AuthService {
 
     // Cập nhật OTP và thời điểm gửi OTP
     await UserRepository.updateUser(user._id, {
-      otp,
-      otp_expiry: otpExpiry,
-      otp_sent_at: otpSentAt,
+      registration_otp: otp,
+      registration_otp_expiry: otpExpiry,
     });
 
     // Gửi OTP qua email
@@ -127,28 +126,89 @@ class AuthService {
     }
 
     const currentTime = new Date();
-    if (currentTime > user.otp_expiry) {
-      throw new Error("Mã OTP đã hết hạn!");
+    if (currentTime > user.registration_otp_expiry) {
+      throw new Error("Mã OTP đăng ký đã hết hạn!");
     }
 
-    if (user.otp === otp) {
-      // Cập nhật trạng thái OTP đã xác thực
-      await UserRepository.updateUser(user._id, { otp_verified: true });
-
-      // Thông báo tới người dùng
-      const mailOptions = {
-        from: process.env.EMAIL_USER,
-        to: email,
-        subject: "Xác thực tài khoản thành công",
-        text: "Tài khoản của bạn đã được xác thực thành công!",
-      };
-
-      await transporter.sendMail(mailOptions);
-
-      return;
-    } else {
-      throw new Error("Mã OTP không chính xác!");
+    if (user.registration_otp !== otp) {
+      throw new Error("Mã OTP đăng ký không chính xác!");
     }
+
+    // Cập nhật trạng thái OTP đã xác thực
+    await UserRepository.updateUser(user._id, {
+      otp_verified: true,
+      registration_otp: null,
+      registration_otp_expiry: null,
+    });
+
+    // Thông báo tới người dùng
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: "Xác thực tài khoản thành công",
+      text: "Tài khoản của bạn đã được xác thực thành công!",
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    return;
+  }
+
+  static async forgotPassword(email) {
+    const user = await UserRepository.findUserByEmail(email);
+    if (!user) {
+      throw new Error("Người dùng không tồn tại!");
+    }
+
+    // Tạo OTP quên mật khẩu
+    const otp = generateOTP();
+    const otpExpiry = new Date(Date.now() + 5 * 60 * 1000); // OTP hết hạn sau 5 phút
+
+    // Cập nhật OTP và thời điểm hết hạn
+    await UserRepository.updateUser(user._id, {
+      password_reset_otp: otp,
+      password_reset_otp_expiry: otpExpiry,
+    });
+
+    // Gửi OTP qua email
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: "Đặt lại mật khẩu",
+      text: `Mã OTP đặt lại mật khẩu của bạn là: ${otp}`,
+    };
+
+    await transporter.sendMail(mailOptions);
+  }
+
+  static async resetPassword(email, otp, newPassword) {
+    const user = await UserRepository.findUserByEmail(email);
+    if (!user) {
+      throw new Error("Người dùng không tồn tại!");
+    }
+
+    const currentTime = new Date();
+    if (currentTime > user.password_reset_otp_expiry) {
+      throw new Error("Mã OTP quên mật khẩu đã hết hạn!");
+    }
+
+    if (user.password_reset_otp !== otp) {
+      throw new Error("Mã OTP quên mật khẩu không chính xác!");
+    }
+
+    if (!newPassword || newPassword.length < 6) {
+      throw new Error("Mật khẩu mới phải có ít nhất 6 ký tự!");
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    // Cập nhật mật khẩu và xóa OTP
+    await UserRepository.updateUser(user._id, {
+      password_hash: hashedPassword,
+      password_reset_otp: null,
+      password_reset_otp_expiry: null,
+    });
   }
 }
 
