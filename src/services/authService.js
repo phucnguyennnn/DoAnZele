@@ -74,11 +74,14 @@ class AuthService {
     const accessToken = generateToken(user._id);
 
     // Chỉ gửi thông tin cần thiết của người dùng
-    const userToSend = {
-      _id: user._id,
-      email: user.email,
-      name: user.name,
-    };
+    const {
+      password_hash,
+      registration_otp,
+      registration_otp_expiry,
+      password_reset_otp,
+      password_reset_otp_expiry,
+      ...userToSend
+    } = user.toObject();
 
     return { user: userToSend, accessToken };
   }

@@ -44,3 +44,59 @@ exports.addOrUpdateAvatar = async (req, res) => {
     });
   }
 };
+
+exports.getUserByIdOrEmail = async (req, res) => {
+  try {
+    const { userId, email } = req.query;
+
+    if (!userId && !email) {
+      return sendResponse(res, 400, "User ID or email is required", "error");
+    }
+
+    const user = await UserService.getUserByIdOrEmail(userId, email);
+
+    if (!user) {
+      return sendResponse(res, 404, "User not found", "error");
+    }
+
+    sendResponse(res, 200, "User fetched successfully", "success", user);
+  } catch (error) {
+    sendResponse(res, 500, "Error fetching user", "error", {
+      error: error.message,
+    });
+  }
+};
+
+exports.getAllUsers = async (req, res) => {
+  try {
+    const { page = 1, limit = 10 } = req.query;
+
+    if (page < 1) {
+      return sendResponse(
+        res,
+        400,
+        "Page number must be greater than or equal to 1",
+        "error"
+      );
+    }
+
+    const { users, totalPages } = await UserService.getAllUsers({
+      page,
+      limit,
+    });
+
+    if (!users || users.length === 0) {
+      return sendResponse(res, 404, "No users found", "error");
+    }
+
+    sendResponse(res, 200, "Users fetched successfully", "success", {
+      users,
+      totalPages,
+      currentPage: parseInt(page),
+    });
+  } catch (error) {
+    sendResponse(res, 500, "Error fetching users", "error", {
+      error: error.message,
+    });
+  }
+};

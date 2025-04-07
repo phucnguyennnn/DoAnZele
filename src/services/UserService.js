@@ -1,4 +1,21 @@
 const User = require("../models/User");
+const UserRepository = require("../repositories/userRepository");
+
+// Utility function to sanitize user data
+const sanitizeUser = (user) => {
+  const {
+    password_hash,
+    registration_otp,
+    registration_otp_expiry,
+    password_reset_otp,
+    password_reset_otp_expiry,
+    otp,
+    otp_expiry,
+    otp_sent_at,
+    ...sanitizedUser
+  } = user.toObject();
+  return sanitizedUser;
+};
 
 exports.updateUserById = async (userId, updateData) => {
   const user = await User.findById(userId);
@@ -18,17 +35,7 @@ exports.updateUserById = async (userId, updateData) => {
   });
 
   await user.save();
-  //   Trả về các thông tin cần thiết của người dùng
-  let userToSend = {
-    _id: user._id,
-    email: user.email,
-    name: user.name,
-    dob: user.dob,
-    phone: user.phone,
-    avatar_images: user.avatar_images,
-    primary_avatar: user.primary_avatar,
-  };
-  return userToSend;
+  return sanitizeUser(user);
 };
 
 exports.addOrUpdateAvatar = async (userId, imageUrl) => {
@@ -47,15 +54,35 @@ exports.addOrUpdateAvatar = async (userId, imageUrl) => {
   }
 
   await user.save();
-  //   Trả về các thông tin cần thiết của người dùng
-  let userToSend = {
-    _id: user._id,
-    email: user.email,
-    name: user.name,
-    dob: user.dob,
-    phone: user.phone,
-    avatar_images: user.avatar_images,
-    primary_avatar: user.primary_avatar,
-  };
-  return userToSend;
+  return sanitizeUser(user);
+};
+
+exports.getUserByIdOrEmail = async (userId, email) => {
+  const user = await UserRepository.findUserByIdOrEmail(userId, email);
+
+  if (!user) {
+    return null;
+  }
+
+  return sanitizeUser(user);
+};
+
+exports.getAllUsers = async ({ page, limit }) => {
+  const { users, totalDocuments } = await UserRepository.findAllUsers({
+    page,
+    limit,
+  });
+
+  // Calculate total pages
+  const totalPages = Math.ceil(totalDocuments / limit);
+
+  // Return an empty array if the requested page exceeds the total pages
+  // if (page > totalPages) {
+  //   return { users: [], totalPages };
+  // }
+
+  // Sanitize each user
+  const sanitizedUsers = users.map(sanitizeUser);
+
+  return { users: sanitizedUsers, totalPages };
 };
