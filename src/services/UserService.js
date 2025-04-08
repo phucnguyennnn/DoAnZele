@@ -1,21 +1,6 @@
 const User = require("../models/User");
 const UserRepository = require("../repositories/userRepository");
-
-// Utility function to sanitize user data
-const sanitizeUser = (user) => {
-  const {
-    password_hash,
-    registration_otp,
-    registration_otp_expiry,
-    password_reset_otp,
-    password_reset_otp_expiry,
-    otp,
-    otp_expiry,
-    otp_sent_at,
-    ...sanitizedUser
-  } = user.toObject();
-  return sanitizedUser;
-};
+const sanitizeUser = require("../utils/sanitizeUser");
 
 exports.updateUserById = async (userId, updateData) => {
   const user = await User.findById(userId);

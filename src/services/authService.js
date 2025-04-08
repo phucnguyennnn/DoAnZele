@@ -5,18 +5,10 @@ const transporter = require("../config/email");
 const handleValidationError = require("../utils/errorHandler");
 const { generateToken } = require("../utils/jwt");
 const crypto = require("crypto");
+const sanitizeUser = require("../utils/sanitizeUser");
 
 class AuthService {
   static async registerUser(phone, email, name, password) {
-    // Kiểm tra người dùng đã tồn tại
-    // const existingUser = await UserRepository.findUserByEmailOrPhone(
-    //   email,
-    //   phone
-    // );
-    // if (existingUser) {
-    //   throw new Error("Email hoặc số điện thoại đã được đăng ký!");
-    // }
-
     // Tạo OTP đăng ký
     const otp = generateOTP();
     const otpExpiry = new Date(Date.now() + 1 * 60 * 1000); // OTP hết hạn sau 1 phút
@@ -66,6 +58,10 @@ class AuthService {
       throw new Error("Người dùng không tồn tại!");
     }
 
+    if (!user.otp_verified) {
+      throw new Error("Tài khoản chưa được xác thực!");
+    }
+
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) {
       throw new Error("Mật khẩu không chính xác!");
@@ -73,17 +69,9 @@ class AuthService {
 
     const accessToken = generateToken(user._id);
 
-    // Chỉ gửi thông tin cần thiết của người dùng
-    const {
-      password_hash,
-      registration_otp,
-      registration_otp_expiry,
-      password_reset_otp,
-      password_reset_otp_expiry,
-      ...userToSend
-    } = user.toObject();
+    const sanitizedUser = sanitizeUser(user);
 
-    return { user: userToSend, accessToken };
+    return { user: sanitizedUser, accessToken };
   }
 
   static async resendOTP(email) {
