@@ -14,9 +14,15 @@ class AuthService {
     const otpExpiry = new Date(Date.now() + 1 * 60 * 1000); // OTP hết hạn sau 1 phút
     const otpSentAt = new Date(); // Lưu thời điểm gửi OTP
 
-    // Mật khẩu không được để trống và phải có ít nhất 6 ký tự
-    if (!password || password.length < 6) {
-      throw new Error("Mật khẩu phải có ít nhất 6 ký tự!");
+    // Mật khẩu không được để trống, phải có ít nhất 6 ký tự và chứa ít nhất 1 ký tự đặc biệt
+    if (
+      !password ||
+      password.length < 6 ||
+      !/[!@#$%^&*(),.?":{}|<>]/.test(password)
+    ) {
+      throw new Error(
+        "Mật khẩu phải có ít nhất 6 ký tự và chứa ít nhất 1 ký tự đặc biệt!"
+      );
     }
 
     // Mã hóa mật khẩu
