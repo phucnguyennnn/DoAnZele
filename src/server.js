@@ -7,6 +7,7 @@ const authMiddleware = require("../src/middlewares/authMiddleware");
 const userRoutes = require("../src/routes/UserRoutes"); // Import user routes
 const cookieParser = require("cookie-parser");
 const messageRoutes = require("../src/routes/MessageRoutes"); // Import message routes
+const conversationRoutes = require("./routes/ConversationRoutes"); // Import conversation routes
 
 dotenv.config();
 connectDB();
@@ -45,10 +46,9 @@ app.use((req, res, next) => {
   authMiddleware(req, res, next);
 });
 
+app.use("/api/conversation", conversationRoutes); // Register conversation routes
 app.use("/api/auth", authRoutes); // Đăng ký các route auth
 app.use("/api/user", userRoutes); // Đăng ký các route user
-
-// http://localhost:5000/api/message
 app.use("/api/message", messageRoutes); // Register message routes
 
 app.listen(process.env.PORT, () => {

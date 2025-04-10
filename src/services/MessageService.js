@@ -1,6 +1,7 @@
 const Message = require("../models/Message");
 const Conversation = require("../models/Conversation");
 const User = require("../models/User");
+const mongoose = require("mongoose");
 
 exports.sendMessage = async (senderId, receiverId, messageData) => {
   const { message_type, content, file_id, mentions, self_destruct_timer } =
@@ -66,4 +67,26 @@ exports.sendMessage = async (senderId, receiverId, messageData) => {
   await conversation.save();
 
   return message;
+};
+
+exports.getMessagesByConversationId = async (conversationId) => {
+  // Kiểm tra ObjectId hợp lệ
+  if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+    throw new Error("Invalid conversation ID");
+  }
+
+  // Tìm cuộc hội thoại
+  const conversation = await Conversation.findById(conversationId);
+  if (!conversation) {
+    throw new Error("Conversation not found");
+  }
+
+  // Lấy tất cả các tin nhắn thuộc về cuộc hội thoại
+  const messages = await Message.find({
+    _id: { $in: conversation.messages.map((msg) => msg.message_id) },
+  })
+    .populate("sender_id", "_id name email phone primary_avatar") // Populate thông tin người gửi
+    .populate("receiver_id", "_id name email phone primary_avatar"); // Populate thông tin người nhận
+
+  return messages;
 };

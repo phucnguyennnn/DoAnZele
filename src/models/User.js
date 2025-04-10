@@ -41,4 +41,16 @@ const UserSchema = new mongoose.Schema({
   },
 });
 
+// UserSchema.set("toJSON", {
+//   transform: (doc, ret) => {
+//     // Chỉ giữ lại các trường cần thiết
+//     return {
+//       _id: ret._id,
+//       name: ret.name,
+//       email: ret.email,
+//       phone: ret.phone,
+//     };
+//   },
+// });
+
 module.exports = mongoose.model("User", UserSchema);

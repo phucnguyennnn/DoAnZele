@@ -6,7 +6,11 @@ const MessageSchema = new mongoose.Schema({
     ref: "User",
     required: true,
   },
-  receiver_id: { type: mongoose.Schema.Types.ObjectId, required: true }, // Can be user or group
+  receiver_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true,
+  }, // Can be user or group
   message_type: {
     type: String,
     enum: ["text", "image", "video", "file", "voice"],

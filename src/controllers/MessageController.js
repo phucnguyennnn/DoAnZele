@@ -37,3 +37,29 @@ exports.sendMessage = async (req, res) => {
     });
   }
 };
+
+exports.getMessagesByConversationId = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+
+    const messages = await MessageService.getMessagesByConversationId(
+      conversationId
+    );
+
+    if (!messages || messages.length === 0) {
+      return sendResponse(res, 404, "No messages found", "error");
+    }
+
+    sendResponse(
+      res,
+      200,
+      "Messages fetched successfully",
+      "success",
+      messages
+    );
+  } catch (error) {
+    sendResponse(res, 500, "Error fetching messages", "error", {
+      error: error.message,
+    });
+  }
+};
