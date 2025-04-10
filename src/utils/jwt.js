@@ -1,9 +1,16 @@
 const jwt = require("jsonwebtoken");
 
-const generateToken = (userId) => {
-  return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
+const generateToken = (userId, res) => {
+  const token = jwt.sign({ userId }, process.env.JWT_SECRET, {
     expiresIn: "30d",
   });
+  res.cookie("jwt", token, {
+    httpOnly: true,
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 ngày
+    secure: process.env.NODE_ENV === "production" ? true : false, // Chỉ gửi cookie qua HTTPS trong môi trường sản xuất
+    sameSite: "strict",
+  });
+  return token;
 };
 
 const verifyToken = (accessToken) => {

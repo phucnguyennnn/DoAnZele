@@ -15,11 +15,7 @@ class AuthService {
     const otpSentAt = new Date(); // Lưu thời điểm gửi OTP
 
     // Mật khẩu không được để trống, phải có ít nhất 6 ký tự và chứa ít nhất 1 ký tự đặc biệt
-    if (
-      !password ||
-      password.length < 6 ||
-      !/[!@#$%^&*(),.?":{}|<>]/.test(password)
-    ) {
+    if (!password || password.length < 6) {
       throw new Error(
         "Mật khẩu phải có ít nhất 6 ký tự và chứa ít nhất 1 ký tự đặc biệt!"
       );
@@ -58,7 +54,7 @@ class AuthService {
     }
   }
 
-  static async loginUser(email, password) {
+  static async loginUser(email, password, res) {
     const user = await UserRepository.findUserByEmail(email);
     if (!user) {
       throw new Error("Người dùng không tồn tại!");
@@ -73,10 +69,9 @@ class AuthService {
       throw new Error("Mật khẩu không chính xác!");
     }
 
-    const accessToken = generateToken(user._id);
+    const accessToken = generateToken(user._id, res); // Sử dụng res.cookie trong generateToken
 
     const sanitizedUser = sanitizeUser(user);
-
     return { user: sanitizedUser, accessToken };
   }
 

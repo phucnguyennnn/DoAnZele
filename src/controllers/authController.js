@@ -20,7 +20,11 @@ const loginUser = async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    const { user, accessToken } = await AuthService.loginUser(email, password);
+    const { user, accessToken } = await AuthService.loginUser(
+      email,
+      password,
+      res
+    );
     sendResponse(res, 200, "Đăng nhập thành công!", "success", {
       user,
       accessToken,
