@@ -69,7 +69,7 @@ class AuthService {
       throw new Error("Mật khẩu không chính xác!");
     }
 
-    const accessToken = generateToken(user._id, res); // Sử dụng res.cookie trong generateToken
+    const accessToken = generateToken(user, res); // Sử dụng res.cookie trong generateToken
 
     const sanitizedUser = sanitizeUser(user);
     return { user: sanitizedUser, accessToken };
