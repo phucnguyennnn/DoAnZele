@@ -8,6 +8,7 @@ const userRoutes = require("../src/routes/UserRoutes"); // Import user routes
 const cookieParser = require("cookie-parser");
 const messageRoutes = require("../src/routes/MessageRoutes"); // Import message routes
 const conversationRoutes = require("./routes/ConversationRoutes"); // Import conversation routes
+const cors = require("cors");
 
 dotenv.config();
 connectDB();
@@ -16,10 +17,9 @@ const app = express();
 app.use(bodyParser.json()); // Phân tích body request
 app.use(bodyParser.urlencoded({ extended: true })); // Phân tích body request với urlencoded
 app.use(cookieParser());
+app.use(cors()); // Cho phép CORS cho tất cả các domain
 
-// Middleware để xử lý CORS
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*"); // Cho phép tất cả các nguồn gốc
   res.header(
     "Access-Control-Allow-Headers",
     "Origin, X-Requested-With, Content-Type, Accept"
