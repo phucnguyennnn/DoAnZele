@@ -2,6 +2,7 @@ const Message = require("../models/Message");
 const Conversation = require("../models/Conversation");
 const User = require("../models/User");
 const mongoose = require("mongoose");
+const { sendMessageToUser } = require("../socket/socket"); // Import hàm gửi tin nhắn qua socket
 
 exports.sendMessage = async (senderId, receiverId, messageData) => {
   const { message_type, content, file_id, mentions, self_destruct_timer } =
@@ -76,6 +77,9 @@ exports.sendMessage = async (senderId, receiverId, messageData) => {
   }
 
   await conversation.save();
+
+  // Gửi tin nhắn qua socket cho người nhận
+  sendMessageToUser(receiverId, "receiveMessage", message);
 
   return message;
 };
