@@ -100,3 +100,25 @@ exports.getAllUsers = async (req, res) => {
     });
   }
 };
+
+exports.searchByNameOrPhone = async (req, res) => {
+  try {
+    const { query } = req.query;
+
+    if (!query) {
+      return sendResponse(res, 400, "Search query is required", "error");
+    }
+
+    const users = await UserService.searchUsersByNameOrPhone(query);
+
+    if (!users || users.length === 0) {
+      return sendResponse(res, 404, "No users found", "error");
+    }
+
+    sendResponse(res, 200, "Users fetched successfully", "success", users);
+  } catch (error) {
+    sendResponse(res, 500, "Error searching users", "error", {
+      error: error.message,
+    });
+  }
+};

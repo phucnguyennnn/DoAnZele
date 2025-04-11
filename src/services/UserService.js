@@ -71,3 +71,12 @@ exports.getAllUsers = async ({ page, limit }) => {
 
   return { users: sanitizedUsers, totalPages };
 };
+
+exports.searchUsersByNameOrPhone = async (query) => {
+  const searchRegex = new RegExp(query, "i"); // Case-insensitive regex
+  const users = await User.find({
+    $or: [{ name: searchRegex }, { phone: searchRegex }],
+  });
+
+  return users.map(sanitizeUser);
+};
