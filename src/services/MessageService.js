@@ -28,7 +28,10 @@ exports.sendMessage = async (senderId, receiverId, messageData) => {
     "message_meta.self_destruct_timer": self_destruct_timer,
   });
 
-  await message.save();
+  (await message.save()).populate(
+    "sender_id receiver_id",
+    "_id name email phone primary_avatar"
+  );
 
   // Update or create a conversation
   let conversation = await Conversation.findOne({
@@ -39,8 +42,16 @@ exports.sendMessage = async (senderId, receiverId, messageData) => {
   if (!conversation) {
     conversation = new Conversation({
       participants: [
-        { user_id: senderId, name: sender.name, image: sender.image },
-        { user_id: receiverId, name: receiver.name, image: receiver.image },
+        {
+          user_id: senderId,
+          name: sender.name,
+          primary_avatar: sender.primary_avatar,
+        },
+        {
+          user_id: receiverId,
+          name: receiver.name,
+          primary_avatar: receiver.primary_avatar,
+        },
       ],
       type: "personal",
       last_message: message._id,
@@ -85,8 +96,8 @@ exports.getMessagesByConversationId = async (conversationId) => {
   const messages = await Message.find({
     _id: { $in: conversation.messages.map((msg) => msg.message_id) },
   })
-    .populate("sender_id", "_id name email phone primary_avatar") // Populate thông tin người gửi
-    .populate("receiver_id", "_id name email phone primary_avatar"); // Populate thông tin người nhận
+    .populate("sender_id", "_id name email phone primary_avatar")
+    .populate("receiver_id", "_id name email phone primary_avatar");
 
   return messages;
 };

@@ -6,7 +6,7 @@ const ConversationSchema = new mongoose.Schema({
     {
       user_id: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
       name: { type: String },
-      image: { type: String },
+      primary_avatar: { type: String },
     },
   ],
   type: {
