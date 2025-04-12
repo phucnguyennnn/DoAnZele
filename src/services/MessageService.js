@@ -2,7 +2,10 @@ const Message = require("../models/Message");
 const Conversation = require("../models/Conversation");
 const User = require("../models/User");
 const mongoose = require("mongoose");
-const { sendMessageToUser } = require("../socket/socket"); // Import hàm gửi tin nhắn qua socket
+const {
+  sendMessageToUser,
+  notifyUsersAboutConversation,
+} = require("../socket/socket"); // Import hàm gửi tin nhắn qua socket
 
 exports.sendMessage = async (senderId, receiverId, messageData) => {
   const { message_type, content, file_id, mentions, self_destruct_timer } =
@@ -65,6 +68,22 @@ exports.sendMessage = async (senderId, receiverId, messageData) => {
         },
       ],
     });
+
+    await conversation.populate("last_message").execPopulate();
+
+    // Gửi thông báo qua WebSocket cho cả hai người dùng về đoạn hội thoại mới
+    notifyUsersAboutConversation(
+      [senderId, receiverId],
+      "newConversation",
+      conversation
+    );
+
+    // Gửi thông báo qua WebSocket
+    notifyUsersAboutConversation(
+      [senderId, receiverId],
+      "updateLastMessage",
+      conversation
+    );
   } else {
     conversation.last_message = message._id;
     conversation.updated_at = Date.now();
@@ -74,6 +93,15 @@ exports.sendMessage = async (senderId, receiverId, messageData) => {
       content: content,
       timestamp: message.timestamp,
     });
+
+    await conversation.populate("last_message").execPopulate();
+
+    // Gửi thông báo qua WebSocket
+    notifyUsersAboutConversation(
+      [senderId, receiverId],
+      "updateLastMessage",
+      conversation
+    );
   }
 
   await conversation.save();

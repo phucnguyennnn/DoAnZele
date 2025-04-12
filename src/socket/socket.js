@@ -42,4 +42,20 @@ const sendMessageToUser = (userId, event, data) => {
   }
 };
 
-module.exports = { initializeSocket, sendMessageToUser, onlineUsers, io };
+// Hàm gửi thông báo về đoạn hội thoại mới cho nhiều người dùng
+const notifyUsersAboutConversation = (userIds, event, data) => {
+  userIds.forEach((userId) => {
+    const socketId = onlineUsers.get(userId);
+    if (socketId) {
+      io.to(socketId).emit(event, data); // Gửi sự kiện đến socketId cụ thể
+    }
+  });
+};
+
+module.exports = {
+  initializeSocket,
+  sendMessageToUser,
+  notifyUsersAboutConversation, // Xuất hàm mới
+  onlineUsers,
+  io,
+};
