@@ -5,6 +5,7 @@ const mongoose = require("mongoose");
 const {
   sendMessageToUser,
   notifyUsersAboutConversation,
+  onlineUsers,
 } = require("../socket/socket"); // Import hàm gửi tin nhắn qua socket
 
 exports.sendMessage = async (senderId, receiverId, messageData) => {
@@ -106,8 +107,12 @@ exports.sendMessage = async (senderId, receiverId, messageData) => {
 
   await conversation.save();
 
-  // Gửi tin nhắn qua socket cho người nhận
-  sendMessageToUser(receiverId, "receiveMessage", message);
+  // Gửi tin nhắn qua socket cho người nhận nếu họ đang online
+  if (onlineUsers.has(receiverId)) {
+    sendMessageToUser(receiverId, "receiveMessage", message);
+  } else {
+    console.log(`User ${receiverId} is not online. Message saved to database.`);
+  }
 
   return message;
 };
