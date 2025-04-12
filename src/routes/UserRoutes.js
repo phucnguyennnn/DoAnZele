@@ -1,12 +1,20 @@
 const express = require("express");
 const router = express.Router();
 const UserController = require("../controllers/UserController");
+const multer = require("multer");
+
+// Cấu hình multer
+const upload = multer({ storage: multer.memoryStorage() });
 
 // http://localhost:5000/api/user/update/:userId
-router.put("/update/:userId", UserController.updateUser); // Route to update user information
+router.put("/update/:userId", upload.none(), UserController.updateUser);
 
 // http://localhost:5000/api/user/updateAvatar/:userId
-router.put("/updateAvatar/:userId", UserController.addOrUpdateAvatar); // Route to add or update avatar
+router.put(
+  "/updateAvatar/:userId",
+  upload.none(),
+  UserController.addOrUpdateAvatar
+);
 
 // http://localhost:5000/api/user/getUser
 router.get("/getUser", UserController.getUserByIdOrEmail); // Route to get user by ID or email

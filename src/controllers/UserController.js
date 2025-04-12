@@ -4,7 +4,19 @@ const sendResponse = require("../utils/response");
 exports.updateUser = async (req, res) => {
   try {
     const { userId } = req.params;
-    const updateData = req.body;
+    const { name, dob, phone, avatar } = req.body;
+    // Kiểm tra các trường bắt buộc (theo schema)
+    if (!name || !phone) {
+      return sendResponse(res, 400, "Name and phone are required", "error");
+    }
+    // Chuẩn bị dữ liệu cập nhật
+    const updateData = { name, phone };
+    if (dob) {
+      updateData.dob = dob;
+    }
+    if (avatar) {
+      updateData.avatar = avatar;
+    }
 
     const updatedUser = await UserService.updateUserById(userId, updateData);
 

@@ -2,8 +2,48 @@ const User = require("../models/User");
 const UserRepository = require("../repositories/userRepository");
 const sanitizeUser = require("../utils/sanitizeUser");
 
+// exports.updateUserById = async (userId, updateData) => {
+//   const user = await User.findById(userId);
+
+//   if (!user) {
+//     throw new Error("User not found");
+//   }
+
+//   // Prevent updates to email and password_hash
+//   if (updateData.email || updateData.password) {
+//     throw new Error("Updating email or password is not allowed");
+//   }
+
+//   // Update other fields
+//   Object.keys(updateData).forEach((key) => {
+//     user[key] = updateData[key];
+//   });
+
+//   await user.save();
+//   return sanitizeUser(user);
+// };
+
+// exports.addOrUpdateAvatar = async (userId, imageUrl) => {
+//   const user = await User.findById(userId);
+//   if (!user) {
+//     throw new Error("User not found");
+//   }
+
+//   if (user.avatar_images.includes(imageUrl)) {
+//     // If the image already exists, set it as the primary avatar
+//     user.primary_avatar = imageUrl;
+//   } else {
+//     // If the image doesn't exist, add it to the list and set it as the primary avatar
+//     user.avatar_images.push(imageUrl);
+//     user.primary_avatar = imageUrl;
+//   }
+
+//   await user.save();
+//   return sanitizeUser(user);
+// };
+
 exports.updateUserById = async (userId, updateData) => {
-  const user = await User.findById(userId);
+  const user = await UserRepository.findUserByIdOrEmail(userId);
 
   if (!user) {
     throw new Error("User not found");
@@ -14,17 +54,33 @@ exports.updateUserById = async (userId, updateData) => {
     throw new Error("Updating email or password is not allowed");
   }
 
-  // Update other fields
+  // Update fields
+  const allowedFields = ["name", "dob", "phone"];
   Object.keys(updateData).forEach((key) => {
-    user[key] = updateData[key];
+    if (allowedFields.includes(key)) {
+      if (key === "dob") {
+        // Chuyển đổi dob từ chuỗi thành Date
+        user[key] = new Date(updateData[key]);
+      } else {
+        user[key] = updateData[key];
+      }
+    }
   });
+
+  // Xử lý avatar nếu có
+  if (updateData.avatar) {
+    if (!user.avatar_images.includes(updateData.avatar)) {
+      user.avatar_images.push(updateData.avatar);
+    }
+    user.primary_avatar = updateData.avatar;
+  }
 
   await user.save();
   return sanitizeUser(user);
 };
 
 exports.addOrUpdateAvatar = async (userId, imageUrl) => {
-  const user = await User.findById(userId);
+  const user = await UserRepository.findUserByIdOrEmail(userId);
   if (!user) {
     throw new Error("User not found");
   }
