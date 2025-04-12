@@ -69,7 +69,7 @@ exports.sendMessage = async (senderId, receiverId, messageData) => {
       ],
     });
 
-    await conversation.populate("last_message").execPopulate();
+    await conversation.populate("last_message");
 
     // Gửi thông báo qua WebSocket cho cả hai người dùng về đoạn hội thoại mới
     notifyUsersAboutConversation(
@@ -94,7 +94,7 @@ exports.sendMessage = async (senderId, receiverId, messageData) => {
       timestamp: message.timestamp,
     });
 
-    await conversation.populate("last_message").execPopulate();
+    await conversation.populate("last_message");
 
     // Gửi thông báo qua WebSocket
     notifyUsersAboutConversation(
