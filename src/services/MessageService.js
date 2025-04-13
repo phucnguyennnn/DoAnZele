@@ -138,3 +138,24 @@ exports.getMessagesByConversationId = async (conversationId) => {
 
   return messages;
 };
+
+exports.revokeMessage = async (messageId, userId) => {
+  // Kiểm tra xem tin nhắn có tồn tại không
+  const message = await Message.findById(messageId);
+
+  if (!message) {
+    throw new Error("Message not found");
+  }
+
+  // Chỉ cho phép người gửi thu hồi tin nhắn
+  if (message.sender_id.toString() !== userId.toString()) {
+    return null; // Không cho phép thu hồi
+  }
+
+  // Đánh dấu tin nhắn là đã bị thu hồi
+  message.is_revoked = true;
+  // message.content = null; // Xóa nội dung tin nhắn
+  await message.save();
+
+  return message;
+};

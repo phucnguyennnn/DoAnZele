@@ -63,3 +63,27 @@ exports.getMessagesByConversationId = async (req, res) => {
     });
   }
 };
+
+exports.revokeMessage = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user._id; // Lấy ID người dùng từ token
+
+    const result = await MessageService.revokeMessage(messageId, userId);
+
+    if (!result) {
+      return sendResponse(
+        res,
+        403,
+        "You are not allowed to revoke this message",
+        "error"
+      );
+    }
+
+    sendResponse(res, 200, "Message revoked successfully", "success", result);
+  } catch (error) {
+    sendResponse(res, 500, "Error revoking message", "error", {
+      error: error.message,
+    });
+  }
+};
