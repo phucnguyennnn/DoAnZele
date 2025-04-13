@@ -21,6 +21,45 @@ const initializeSocket = (server) => {
       console.log(`User ${userId} is online with socket ID ${socket.id}`);
     });
 
+    // Lắng nghe sự kiện thu hồi tin nhắn
+    socket.on("revokeMessage", async ({ messageId, userId }) => {
+      try {
+        const result =
+          await require("../services/MessageService").revokeMessage(
+            messageId,
+            userId
+          );
+
+        if (!result) {
+          socket.emit("error", "You are not allowed to revoke this message");
+          return;
+        }
+
+        // Gửi thông báo real-time đến người nhận và người gửi
+        const receiverId = result.receiver_id.toString();
+        const senderId = result.sender_id.toString();
+
+        // Thông báo cho người nhận
+        if (onlineUsers.has(receiverId)) {
+          io.to(onlineUsers.get(receiverId)).emit("messageRevoked", {
+            messageId,
+            is_revoked: true,
+          });
+        }
+
+        // Thông báo cho người gửi
+        if (onlineUsers.has(senderId)) {
+          io.to(onlineUsers.get(senderId)).emit("messageRevoked", {
+            messageId,
+            is_revoked: true,
+          });
+        }
+      } catch (error) {
+        console.error("Error revoking message:", error.message);
+        socket.emit("error", "Error revoking message");
+      }
+    });
+
     // Lắng nghe sự kiện ngắt kết nối
     socket.on("disconnect", () => {
       for (const [userId, socketId] of onlineUsers.entries()) {
