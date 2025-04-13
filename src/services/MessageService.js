@@ -44,6 +44,8 @@ exports.sendMessage = async (senderId, receiverId, messageData) => {
     participants: { $size: 2 }, // Đảm bảo chỉ có 2 người tham gia
   });
 
+  // Kiểm tra xem cuộc hội thoại đã tồn tại hay chưa
+  // Nếu không tồn tại, tạo một cuộc hội thoại mới
   if (!conversation) {
     conversation = new Conversation({
       participants: [
@@ -86,6 +88,7 @@ exports.sendMessage = async (senderId, receiverId, messageData) => {
       conversation
     );
   } else {
+    // Nếu cuộc hội thoại đã tồn tại, cập nhật thông tin cuộc hội thoại
     conversation.last_message = message._id;
     conversation.updated_at = Date.now();
     conversation.messages.push({

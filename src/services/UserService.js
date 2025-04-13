@@ -134,5 +134,26 @@ exports.searchUsersByNameOrPhone = async (query) => {
     $or: [{ name: searchRegex }, { phone: searchRegex }],
   });
 
-  return users.map(sanitizeUser);
+  // return users.map(sanitizeUser);
+  // Bỏ thêm thuộc tính "avatar_images" của người dùng
+  const sanitizedUsers = users.map((user) => {
+    const {
+      avatar_images,
+      password_hash,
+      registration_otp,
+      registration_otp_expiry,
+      otp_verified,
+      created_at,
+      __v,
+      otp,
+      otp_expiry,
+      otp_sent_at,
+      password_reset_otp,
+      password_reset_otp_expiry,
+      ...rest
+    } = user.toObject();
+    return rest;
+  });
+
+  return sanitizedUsers;
 };
