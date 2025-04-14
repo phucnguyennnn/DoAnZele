@@ -1,31 +1,38 @@
 import React, { useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import { Box, Typography, TextField, Button, CircularProgress } from "@mui/material";
-import axios from "axios";
+import { useLocation, useNavigate } from "react-router-dom";  // Ensure these are imported
+import { Box, Typography, TextField, Button, CircularProgress } from "@mui/material";  // Import MUI components
+import axios from "axios";  // Import axios for API calls
 
-const VerifyOtpPage = () => {
+
+const VerifyOtpPage = ({ setIsAuthenticated }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const email = location.state?.email || "";  // Lấy email từ state của router
+  const email = location.state?.email || "";
 
-  const [otp, setOtp] = useState("");  // Trạng thái mã OTP
-  const [message, setMessage] = useState("");  // Thông báo xác thực
-  const [loading, setLoading] = useState(false);  // Trạng thái loading khi gọi API
+  const [otp, setOtp] = useState("");
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  if (!email) {
+    navigate("/login");
+  }
 
   const handleVerify = async () => {
     setLoading(true);
-    setMessage("");  // Xóa thông báo trước khi gửi
-  
+    setMessage("");
+
     try {
       const res = await axios.post("http://localhost:5000/api/auth/verify-otp", {
         email,
         otp,
       });
-  
-      console.log("Server Response:", res.data);  // Log toàn bộ phản hồi để kiểm tra cấu trúc
-  
+
+      console.log("Server Response:", res.data);
+
       if (res.status === 200) {
         setMessage("Xác thực thành công!");
+        localStorage.setItem("accessToken", res.data.accessToken);  // Lưu accessToken
+        setIsAuthenticated(true);  // Cập nhật trạng thái isAuthenticated trong App
         setTimeout(() => {
           navigate("/home");
         }, 2000);
@@ -34,13 +41,11 @@ const VerifyOtpPage = () => {
       }
     } catch (err) {
       console.error(err.response);
-      setMessage("Lỗi khi xác thực OTP");
+      setMessage(err.response?.data?.message || "Lỗi khi xác thực OTP");
     } finally {
       setLoading(false);
     }
   };
-  
-  
 
   const handleResendOTP = async () => {
     setMessage(""); // Xóa thông báo cũ
@@ -63,6 +68,7 @@ const VerifyOtpPage = () => {
     }
   };
 
+
   return (
     <Box sx={{ maxWidth: 400, margin: "auto", mt: 6 }}>
       <Typography variant="h5" mb={2}>Xác thực OTP</Typography>
@@ -82,18 +88,18 @@ const VerifyOtpPage = () => {
         color="primary"
         onClick={handleVerify}
         sx={{ mt: 2 }}
-        disabled={loading}  // Vô hiệu hóa nút khi đang loading
+        disabled={loading}
       >
-        {loading ? <CircularProgress size={24} /> : "Xác nhận"}
+        {loading ? <CircularProgress size={20} /> : "Xác nhận"}
       </Button>
       <Button
         fullWidth
         variant="text"
         onClick={handleResendOTP}
         sx={{ mt: 2 }}
-        disabled={loading}  // Vô hiệu hóa nút khi đang loading
+        disabled={loading}
       >
-        {loading ? <CircularProgress size={24} /> : "Gửi lại mã OTP"}
+        {loading ? <CircularProgress size={20} /> : "Gửi lại mã OTP"}
       </Button>
       {message && (
         <Typography mt={2} color={message === "Xác thực thành công!" ? "green" : "red"}>

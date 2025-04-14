@@ -1,140 +1,154 @@
 import React, { useState } from 'react';
-import { TextField, Button, Box, Typography, CircularProgress, Divider } from '@mui/material';
+import { 
+  TextField, 
+  Button, 
+  Box, 
+  Typography, 
+  CircularProgress, 
+  Link 
+} from '@mui/material';
 import { styled } from '@mui/system';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { useLocation } from 'react-router-dom';
+
 
 const Container = styled(Box)({
   display: 'flex',
   justifyContent: 'center',
   alignItems: 'center',
-  height: '100vh',
-  backgroundColor: '#dfe8ef',
+  minHeight: '100vh',
+  backgroundColor: '#f5f7fa',
 });
 
-const LoginBox = styled(Box)(({ theme }) => ({
+const LoginCard = styled(Box)({
   width: '100%',
-  maxWidth: '400px',
-  padding: theme.spacing(4),
+  maxWidth: 400,
+  padding: '32px', // Tương đương theme.spacing(4)
   borderRadius: '8px',
-  backgroundColor: 'white',
-  boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+  backgroundColor: '#ffffff',
+  boxShadow: '0px 3px 1px -2px rgba(0,0,0,0.2), 0px 2px 2px 0px rgba(0,0,0,0.14), 0px 1px 5px 0px rgba(0,0,0,0.12)', // Shadow mức 3
   textAlign: 'center',
-}));
-
-const Title = styled(Typography)({
-  fontSize: '32px',
-  fontWeight: 'bold',
-  color: '#0068ff',
-  marginBottom: '24px',
 });
 
-const ErrorText = styled(Typography)({
-  color: 'red',
-  marginTop: '8px',
-});
+const encryptData = (data) => {
+  return JSON.stringify(data); // Có thể thay bằng mã hóa nâng cao nếu cần
+};
+const LoginPage = ({ setIsAuthenticated }) => {
+  const location = useLocation(); // Thêm dòng này
+  
 
-const LoginPage = () => {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [formData, setFormData] = useState({
+    email: '',
+    password: ''
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleLogin = async () => {
-    setError('');
-    setLoading(true);
-  
-    const gmailRegex = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
-    let isValid = true;
-  
-  
-    if (!gmailRegex.test(email)) {
-      setError('Chỉ chấp nhận email hợp lệ (ví dụ: example@gmail.com).');
-      isValid = false;
-    }
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
 
+  const validateForm = () => {
+    const { email, password } = formData;
+    const gmailRegex = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
+    
+    if (!gmailRegex.test(email)) {
+      setError('Vui lòng nhập địa chỉ Gmail hợp lệ');
+      return false;
+    }
+    
     if (password.length < 6) {
-      setError('Mật khẩu phải có ít nhất 6 ký tự.');
-      isValid = false;
+      setError('Mật khẩu phải có ít nhất 6 ký tự');
+      return false;
     }
-  
-    if (!isValid) {
-      setLoading(false);
-      return;
-    }
-  
+    
+    return true;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    if (!validateForm()) return;
+
+      setLoading(true);
+
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/login', {
-        email,
-        password,
-      });
-  
-      const { user, accessToken } = response.data.data;
+      const response = await axios.post('http://localhost:5000/api/auth/login', formData);
+      const { accessToken, user } = response.data.data;
+
+      // Lưu vào localStorage
       localStorage.setItem('accessToken', accessToken);
-      localStorage.setItem('user', JSON.stringify(user));
-  
-      navigate('/home');
+      localStorage.setItem('user', encryptData(user)); // <-- SỬA Ở ĐÂY
+
+      setIsAuthenticated(true);
+      navigate(location.state?.from || '/home');
     } catch (err) {
-      setError('Đăng nhập không thành công. Vui lòng kiểm tra lại thông tin.');
+      setError(err.response?.data?.message || 'Đăng nhập thất bại. Vui lòng thử lại.');
     } finally {
       setLoading(false);
     }
   };
-  
+
   return (
     <Container>
-      <LoginBox>
-        <Title>Zele</Title>
-        {/* Logo hoặc biểu tượng có thể được thêm vào đây nếu muốn */}
-
+      <LoginCard component="form" onSubmit={handleSubmit}>
+        <Typography variant="h4" color="primary" gutterBottom>
+          Zele
+        </Typography>
+        
         <TextField
+          name="email"
           label="Email"
-          variant="outlined"
-          fullWidth
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
           type="email"
-          required
-          sx={{ marginBottom: 2 }}
-        />
-        <TextField
-          label="Mật khẩu"
-          variant="outlined"
+          value={formData.email}
+          onChange={handleChange}
           fullWidth
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          type="password"
+          margin="normal"
           required
-          sx={{ marginBottom: 2 }}
         />
-
-        {error && <ErrorText>{error}</ErrorText>}
-
+        
+        <TextField
+          name="password"
+          label="Mật khẩu"
+          type="password"
+          value={formData.password}
+          onChange={handleChange}
+          fullWidth
+          margin="normal"
+          required
+        />
+        
+        {error && (
+          <Typography color="error" variant="body2" mt={1}>
+            {error}
+          </Typography>
+        )}
+        
         <Button
+          type="submit"
           fullWidth
           variant="contained"
           color="primary"
-          onClick={handleLogin}
           disabled={loading}
-          sx={{ padding: '12px', marginTop: 2 }}
+          sx={{ mt: 3, mb: 2, height: 48 }}
         >
-          {loading ? <CircularProgress size={24} color="inherit" /> : 'Đăng nhập'}
+          {loading ? <CircularProgress size={24} /> : 'Đăng nhập'}
         </Button>
-
-        {/* Option for other actions like Register */}
-        <Box sx={{ display: 'flex', justifyContent: 'center', marginTop: 2 }}>
-          <Typography variant="body2" color="textSecondary">
-            Chưa có tài khoản? <a href="/register">Đăng ký</a>
-          </Typography>
-        </Box>
-
-        {/* <Divider sx={{ margin: '16px 0' }} />
-
-        <Button fullWidth variant="outlined" sx={{ marginTop: 2 }}>
-          Đăng nhập với Google
-        </Button> */}
-      </LoginBox>
+        
+        <Typography variant="body2">
+          Chưa có tài khoản?{' '}
+          <Link href="/register" underline="hover">
+            Đăng ký ngay
+          </Link>
+        </Typography>
+      </LoginCard>
     </Container>
   );
 };

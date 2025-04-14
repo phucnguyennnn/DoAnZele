@@ -11,7 +11,7 @@ const RegisterPage = () => {
         password: '',
     });
 
-    const [loading, setLoading] = useState(false); // ✅ Thêm state loading
+    const [loading, setLoading] = useState(false);
     const [openSnackbar, setOpenSnackbar] = useState(false);
     const [snackbarMessage, setSnackbarMessage] = useState('');
     const navigate = useNavigate();
@@ -21,10 +21,10 @@ const RegisterPage = () => {
     };
 
     const handleRegister = async () => {
-        setLoading(true); // ✅ Bật loading
+        setLoading(true); 
         try {
             const res = await axios.post('http://localhost:5000/api/auth/register', formData);
-            if (res.status === 200) {
+            if (res.status === 201) {
                 setSnackbarMessage('Đăng ký thành công! Vui lòng kiểm tra email để xác thực OTP.');
                 setOpenSnackbar(true);
                 navigate("/verify-otp", { state: { email: formData.email } });

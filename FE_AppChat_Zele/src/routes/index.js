@@ -1,31 +1,39 @@
-import Contact from '~/pages/Contact';
-import Home from '~/pages/Home';
 import LoginPage from '~/pages/LoginPage';
 import RegisterPage from '~/pages/RegisterPage';
 import VerifyOtpPage from '~/pages/VerifyOtpPage';
+import Home from '~/pages/Home';
+import ProfilePage from '~/pages/ProfilePage';
 
-const publicRoutes = [];
+export const publicRoutes = [
+    {
+        path: '/',
+        component: LoginPage,
+        layout: null // No layout for the login page
 
-//private routes
-const privateRoutes = [
-    { path: '/', component: LoginPage, layout: null }, // Không dùng layout
-    { path: '/contact', component: Contact },
+    },
     {
         path: '/register',
         component: RegisterPage,
-        layout: null, // không cần layout mặc định nếu muốn
+        layout: null // No layout for the register page
+
     },
     {
         path: '/verify-otp',
         component: VerifyOtpPage,
-        layout: null,
-    },
-    {
-        path: '/home',
-        component: Home,
-        layout: null, // không cần layout mặc định nếu muốn
+        layout: null // No layout for the verify OTP page
     }
 ];
 
+export const privateRoutes = [
+    {
+        path: '/home',
+        component: Home,
+        layout: null // No layout for the home page
+    },
+    {
+        path: '/profile',
+        component: ProfilePage,
+        layout: null // No layout for the profile page
+    }
+];
 
-export { publicRoutes, privateRoutes };
