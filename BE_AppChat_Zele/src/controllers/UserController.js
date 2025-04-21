@@ -4,7 +4,19 @@ const sendResponse = require("../utils/response");
 exports.updateUser = async (req, res) => {
   try {
     const { userId } = req.params;
-    const updateData = req.body;
+    const { name, dob, phone, avatar } = req.body;
+    // Kiểm tra các trường bắt buộc (theo schema)
+    if (!name || !phone) {
+      return sendResponse(res, 400, "Name and phone are required", "error");
+    }
+    // Chuẩn bị dữ liệu cập nhật
+    const updateData = { name, phone };
+    if (dob) {
+      updateData.dob = dob;
+    }
+    if (avatar) {
+      updateData.avatar = avatar;
+    }
 
     const updatedUser = await UserService.updateUserById(userId, updateData);
 
@@ -96,6 +108,52 @@ exports.getAllUsers = async (req, res) => {
     });
   } catch (error) {
     sendResponse(res, 500, "Error fetching users", "error", {
+      error: error.message,
+    });
+  }
+};
+
+exports.searchByNameOrPhone = async (req, res) => {
+  try {
+    const { query } = req.query;
+
+    if (!query) {
+      return sendResponse(res, 400, "Search query is required", "error");
+    }
+
+    const users = await UserService.searchUsersByNameOrPhone(query);
+
+    if (!users || users.length === 0) {
+      return sendResponse(res, 404, "No users found", "error");
+    }
+
+    sendResponse(res, 200, "Users fetched successfully", "success", users);
+  } catch (error) {
+    sendResponse(res, 500, "Error searching users", "error", {
+      error: error.message,
+    });
+  }
+};
+
+exports.getUserFriends = async (req, res) => {
+  try {
+    const userId = req.params.userId || req.user._id;
+
+    const friends = await UserService.getUserFriends(userId);
+
+    if (!friends || friends.length === 0) {
+      return sendResponse(res, 200, "Không có bạn bè nào", "success", []);
+    }
+
+    sendResponse(
+      res,
+      200,
+      "Lấy danh sách bạn bè thành công",
+      "success",
+      friends
+    );
+  } catch (error) {
+    sendResponse(res, 500, "Lỗi khi lấy danh sách bạn bè", "error", {
       error: error.message,
     });
   }

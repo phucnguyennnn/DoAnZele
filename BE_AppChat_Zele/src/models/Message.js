@@ -24,6 +24,7 @@ const MessageSchema = new mongoose.Schema({
     enum: ["sent", "delivered", "seen"],
     default: "sent",
   },
+  is_revoked: { type: Boolean, default: false }, // Đối với tin nhắn đã thu hồi
   message_meta: {
     is_edited: { type: Boolean, default: false },
     is_deleted: { type: Boolean, default: false },

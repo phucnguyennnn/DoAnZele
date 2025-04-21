@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, TextField, IconButton } from '@mui/material';
 import {
     AttachFile as AttachFileIcon,
@@ -7,27 +7,26 @@ import {
     Send as SendIcon
 } from '@mui/icons-material';
 import axios from 'axios';
+import socket from '../../socket/socket';
 
-const MessageInput = ({ selectedFriend, onMessageSent }) => {
+const MessageInput = ({ selectedFriend, conversationId, onMessageSent, onTypingStarted, onTypingStopped, disabled }) => {
     const [messageContent, setMessageContent] = useState('');
     const token = localStorage.getItem('accessToken');
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
 
     const updateLastMessage = (recipientId, messageContent) => {
-        let storedUsers = JSON.parse(localStorage.getItem('savedUsers')) || [];
-        storedUsers = storedUsers.map((user) => {
-            if (user._id === recipientId) {
-                return { ...user, lastMessage: messageContent };
-            }
-            return user;
-        });
-        localStorage.setItem('savedUsers', JSON.stringify(storedUsers));
+        let saved = JSON.parse(localStorage.getItem('savedUsers')) || [];
+        saved = saved.map(user =>
+            user._id === recipientId ? { ...user, lastMessage: messageContent } : user
+        );
+        localStorage.setItem('savedUsers', JSON.stringify(saved));
     };
 
     const handleSendMessage = async () => {
-        if (!selectedFriend || !messageContent.trim()) return;
+        if (!selectedFriend || !messageContent.trim() || !conversationId) return;
 
         try {
-            await axios.post(
+            const res = await axios.post(
                 'http://localhost:5000/api/message/send',
                 {
                     receiverId: selectedFriend._id,
@@ -42,14 +41,46 @@ const MessageInput = ({ selectedFriend, onMessageSent }) => {
                 }
             );
 
+            const sentMessage = res.data.data;
+
+            // 🔄 Cập nhật tin nhắn cuối cùng vào localStorage
             updateLastMessage(selectedFriend._id, messageContent);
+
+            // 🔄 Xóa nội dung input
             setMessageContent('');
-            if (onMessageSent) onMessageSent();
+
+            // ✅ Gửi socket đến người nhận
+            socket.emit('sendMessage', {
+                senderId: sentMessage.sender_id,     // ID người gửi
+                receiverId: selectedFriend._id,      // ID người nhận
+                conversation_id: conversationId,
+                conversationId: conversationId,      // Thêm dạng camelCase cho nhất quán
+                content: messageContent,
+                _id: sentMessage._id,                // ID tin nhắn
+                createdAt: sentMessage.createdAt,    // thời gian gửi
+                participants: [user._id, selectedFriend._id] // Thêm participants để xử lý notification
+            });
+
+            // ✅ Hiển thị ngay ở UI của người gửi
+            if (onMessageSent) onMessageSent(sentMessage);
+
+            // ✅ Dừng chỉ báo đang nhập khi gửi tin nhắn
+            if (onTypingStopped) onTypingStopped();
+
         } catch (error) {
-            console.error("Lỗi khi gửi tin nhắn:", error);
+            console.error("❗ Lỗi gửi tin nhắn:", error);
         }
     };
 
+    const handleChange = (e) => {
+        setMessageContent(e.target.value);
+        // Emit typing event when user is typing
+        if (onTypingStarted && e.target.value.trim()) {
+            onTypingStarted();
+        } else if (onTypingStopped && !e.target.value.trim()) {
+            onTypingStopped();
+        }
+    };
 
     const handleKeyPress = (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -57,9 +88,13 @@ const MessageInput = ({ selectedFriend, onMessageSent }) => {
             handleSendMessage();
         }
     };
-     console.log("Nội dung tin nhắn:", messageContent);
-    console.log("Người nhận:", selectedFriend._id);
 
+    // Stop typing indicator when component unmounts
+    useEffect(() => {
+        return () => {
+            if (onTypingStopped) onTypingStopped();
+        };
+    }, [onTypingStopped]);
 
     return (
         <Box
@@ -78,16 +113,18 @@ const MessageInput = ({ selectedFriend, onMessageSent }) => {
                 placeholder={selectedFriend ? "Nhập tin nhắn..." : "Chọn người để nhắn..."}
                 size="small"
                 value={messageContent}
-                onChange={(e) => setMessageContent(e.target.value)}
+                onChange={handleChange}
                 onKeyPress={handleKeyPress}
+                onFocus={() => messageContent.trim() && onTypingStarted && onTypingStarted()}
+                onBlur={() => onTypingStopped && onTypingStopped()}
                 sx={{ mx: 1 }}
-                disabled={!selectedFriend}
+                disabled={!selectedFriend || disabled}
             />
 
             <IconButton><MicIcon /></IconButton>
-            <IconButton 
+            <IconButton
                 onClick={handleSendMessage}
-                disabled={!messageContent.trim() || !selectedFriend}
+                disabled={!messageContent.trim() || !selectedFriend || disabled}
             >
                 <SendIcon />
             </IconButton>

@@ -3,7 +3,7 @@ const UserRepository = require("../repositories/userRepository");
 const sanitizeUser = require("../utils/sanitizeUser");
 
 exports.updateUserById = async (userId, updateData) => {
-  const user = await User.findById(userId);
+  const user = await UserRepository.findUserByIdOrEmail(userId);
 
   if (!user) {
     throw new Error("User not found");
@@ -14,17 +14,33 @@ exports.updateUserById = async (userId, updateData) => {
     throw new Error("Updating email or password is not allowed");
   }
 
-  // Update other fields
+  // Update fields
+  const allowedFields = ["name", "dob", "phone"];
   Object.keys(updateData).forEach((key) => {
-    user[key] = updateData[key];
+    if (allowedFields.includes(key)) {
+      if (key === "dob") {
+        // Chuyển đổi dob từ chuỗi thành Date
+        user[key] = new Date(updateData[key]);
+      } else {
+        user[key] = updateData[key];
+      }
+    }
   });
+
+  // Xử lý avatar nếu có
+  if (updateData.avatar) {
+    if (!user.avatar_images.includes(updateData.avatar)) {
+      user.avatar_images.push(updateData.avatar);
+    }
+    user.primary_avatar = updateData.avatar;
+  }
 
   await user.save();
   return sanitizeUser(user);
 };
 
 exports.addOrUpdateAvatar = async (userId, imageUrl) => {
-  const user = await User.findById(userId);
+  const user = await UserRepository.findUserByIdOrEmail(userId);
   if (!user) {
     throw new Error("User not found");
   }
@@ -70,4 +86,26 @@ exports.getAllUsers = async ({ page, limit }) => {
   const sanitizedUsers = users.map(sanitizeUser);
 
   return { users: sanitizedUsers, totalPages };
+};
+
+exports.searchUsersByNameOrPhone = async (query) => {
+  const searchRegex = new RegExp(query, "i"); // Case-insensitive regex
+  const users = await User.find({
+    $or: [{ name: searchRegex }, { phone: searchRegex }],
+  });
+
+  return users.map(sanitizeUser);
+};
+
+exports.getUserFriends = async (userId) => {
+  const user = await User.findById(userId).populate(
+    "friends",
+    "name email phone primary_avatar"
+  );
+
+  if (!user) {
+    throw new Error("Không tìm thấy người dùng");
+  }
+
+  return user.friends;
 };

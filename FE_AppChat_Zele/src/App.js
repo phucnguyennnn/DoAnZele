@@ -4,7 +4,12 @@ import { DefaultLayout } from '~/components/Layout';
 import { useState, useEffect } from 'react';
 import { Fragment } from 'react';
 import { useLocation } from 'react-router-dom';
+import DebugMonitor from './utils/DebugMonitor';
 
+// Khởi tạo debug monitor trong môi trường development
+if (process.env.NODE_ENV !== 'production') {
+    DebugMonitor.init();
+}
 
 function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('accessToken'));
