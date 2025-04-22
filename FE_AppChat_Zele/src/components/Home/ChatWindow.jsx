@@ -589,60 +589,22 @@ const ChatWindow = ({ selectedFriend, setSelectedFriend }) => {
             );
         }
         
-        if (isGroupChat) {
-            // Group chat messages with user names
-            return messages.map((msg) => {
-                const isCurrentUser = msg.sender_id._id === userId;
-                const senderName = isCurrentUser ? 'You' : getSenderName(msg.sender_id._id);
-                const senderAvatar = getSenderAvatar(msg.sender_id._id);
-                
-                return (
-                    <Box 
-                        key={msg._id}
-                        alignSelf={isCurrentUser ? 'flex-end' : 'flex-start'} 
-                        mb={1.5}
-                        maxWidth="70%"
-                    >
-                        {!isCurrentUser && (
-                            <Box display="flex" alignItems="center" mb={0.5}>
-                                <Avatar src={senderAvatar} sx={{ width: 24, height: 24, mr: 1 }} />
-                                <Typography variant="caption" color="textSecondary">
-                                    {senderName}
-                                </Typography>
-                            </Box>
-                        )}
-                        
-                        <MessageBubble
-                            sender={msg.sender_id._id}
-                            content={msg.content}
-                            time={new Date(msg.timestamp).toLocaleTimeString()}
-                            userId={userId}
-                            isRead={readStatus[msg._id]?.includes(selectedFriend._id)}
-                            messageType={msg.message_type}
-                            fileUrl={msg.file_meta?.url}
-                            fileName={msg.file_meta?.name}
-                            isRevoked={msg.is_revoked}
-                        />
-                    </Box>
-                );
-            });
-        } else {
-            // Individual chat messages
-            return messages.map((msg) => (
-                <MessageBubble
-                    key={msg._id}
-                    sender={msg.sender_id._id}
-                    content={msg.content}
-                    time={new Date(msg.timestamp).toLocaleTimeString()}
-                    userId={userId}
-                    isRead={readStatus[msg._id]?.includes(selectedFriend._id)}
-                    messageType={msg.message_type}
-                    fileUrl={msg.file_meta?.url}
-                    fileName={msg.file_meta?.name}
-                    isRevoked={msg.is_revoked}
-                />
-            ));
-        }
+        return messages.map((msg) => (
+            <MessageBubble
+                key={msg._id}
+                sender={msg.sender_id._id || msg.sender_id}
+                content={msg.content}
+                time={new Date(msg.timestamp || msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                userId={userId}
+                isRead={readStatus[msg._id]?.includes(selectedFriend._id)}
+                messageType={msg.message_type}
+                fileUrl={msg.file_meta?.url}
+                fileName={msg.file_meta?.name}
+                isRevoked={msg.is_revoked}
+                senderName={selectedFriend.isGroup ? getSenderName(msg.sender_id._id || msg.sender_id) : null}
+                senderAvatar={selectedFriend.isGroup ? getSenderAvatar(msg.sender_id._id || msg.sender_id) : selectedFriend.avatar}
+            />
+        ));
     };
 
     return (

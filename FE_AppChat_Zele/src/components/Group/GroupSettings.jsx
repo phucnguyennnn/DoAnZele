@@ -1,189 +1,61 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   Button,
-  Typography,
   Box,
-  Avatar,
-  List,
-  ListItem,
-  ListItemAvatar,
-  ListItemText,
-  IconButton,
-  TextField,
-  Divider,
-  MenuItem,
-  Menu,
   Tab,
   Tabs,
+  Typography,
+  TextField,
+  IconButton,
+  Avatar,
   FormControl,
-  InputLabel,
-  Select,
+  FormControlLabel,
+  FormLabel,
+  Radio,
+  RadioGroup,
+  Divider,
   CircularProgress,
-  Tooltip,
-  Paper,
+  Alert
 } from '@mui/material';
-import {
-  Edit,
-  Delete,
-  PhotoCamera,
-  ContentCopy,
-  Refresh,
-  Close,
-  PersonAdd,
-  MoreVert,
-} from '@mui/icons-material';
+import { PhotoCamera, Save, Delete, Group } from '@mui/icons-material';
 import axios from 'axios';
-import socket from '../../socket/socket';
-
-// Custom TabPanel component
-function TabPanel(props) {
-  const { children, value, index, ...other } = props;
-
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`group-tabpanel-${index}`}
-      aria-labelledby={`group-tab-${index}`}
-      {...other}
-    >
-      {value === index && (
-        <Box sx={{ p: 2 }}>
-          {children}
-        </Box>
-      )}
-    </div>
-  );
-}
+import ManageMembers from './ManageMembers';
 
 const GroupSettings = ({ open, group, onClose, onUpdate, onDelete }) => {
-  const [tabValue, setTabValue] = useState(0);
-  const [editMode, setEditMode] = useState(false);
-  const [groupName, setGroupName] = useState('');
-  const [groupDescription, setGroupDescription] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState(0);
+  const [name, setName] = useState(group?.name || '');
+  const [description, setDescription] = useState(group?.description || '');
   const [avatar, setAvatar] = useState(null);
-  const [avatarPreview, setAvatarPreview] = useState('');
-  const [inviteLink, setInviteLink] = useState('');
-  const [inviteLinkLoading, setInviteLinkLoading] = useState(false);
-  const [memberActionAnchorEl, setMemberActionAnchorEl] = useState(null);
-  const [selectedMember, setSelectedMember] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [messageSettings, setMessageSettings] = useState('all');
-  const [memberSettings, setMemberSettings] = useState('admins');
-  const [settingsLoading, setSettingsLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
-
+  const [avatarPreview, setAvatarPreview] = useState(group?.avatar || '');
+  const [whoCanSendMessages, setWhoCanSendMessages] = useState(
+    group?.settings?.who_can_send_messages || 'all'
+  );
+  const [whoCanAddMembers, setWhoCanAddMembers] = useState(
+    group?.settings?.who_can_add_members || 'admins_moderators'
+  );
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  
   const token = localStorage.getItem('accessToken');
   const currentUser = JSON.parse(localStorage.getItem('user'));
   
   // Check if current user is admin
   const isAdmin = group?.members?.some(
-    member => member.user._id === currentUser._id && member.role === 'admin'
+    m => (m.user._id === currentUser._id || m.user === currentUser._id) && m.role === 'admin'
   );
   
-  // Check if current user is moderator
-  const isModerator = group?.members?.some(
-    member => member.user._id === currentUser._id && member.role === 'moderator'
-  );
-
-  // Get group details on open
-  useEffect(() => {
-    if (open && group) {
-      setGroupName(group.name || '');
-      setGroupDescription(group.description || '');
-      setAvatarPreview(group.avatar || '');
-      setMessageSettings(group.settings?.who_can_send_messages || 'all');
-      setMemberSettings(group.settings?.who_can_add_members || 'admins');
-      
-      // Get invite link if admin or moderator
-      if (isAdmin || isModerator) {
-        fetchInviteLink();
-      }
-    }
-  }, [open, group]);
-
-  const fetchInviteLink = async () => {
-    if (!group?._id) return;
-    
-    try {
-      setInviteLinkLoading(true);
-      const response = await axios.get(
-        `http://localhost:5000/api/group/${group._id}/invite`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
-      if (response.data && response.data.status === 'success') {
-        setInviteLink(response.data.data.invite_link.url || '');
-      }
-    } catch (error) {
-      console.error('Error fetching invite link:', error);
-    } finally {
-      setInviteLinkLoading(false);
-    }
-  };
-
-  const regenerateInviteLink = async () => {
-    if (!group?._id || !isAdmin) return;
-    
-    try {
-      setInviteLinkLoading(true);
-      const response = await axios.post(
-        `http://localhost:5000/api/group/${group._id}/invite/regenerate`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
-      if (response.data && response.data.status === 'success') {
-        setInviteLink(response.data.data.invite_link.url || '');
-      }
-    } catch (error) {
-      console.error('Error regenerating invite link:', error);
-    } finally {
-      setInviteLinkLoading(false);
-    }
-  };
-
-  const toggleInviteLinkStatus = async (isActive) => {
-    if (!group?._id || !isAdmin) return;
-    
-    try {
-      setInviteLinkLoading(true);
-      const response = await axios.put(
-        `http://localhost:5000/api/group/${group._id}/invite`,
-        { isActive },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
-      if (response.data && response.data.status === 'success') {
-        fetchInviteLink(); // Refresh the link
-      }
-    } catch (error) {
-      console.error('Error updating invite link status:', error);
-    } finally {
-      setInviteLinkLoading(false);
-    }
-  };
-
-  const copyInviteLink = () => {
-    navigator.clipboard.writeText(inviteLink)
-      .then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      })
-      .catch(err => console.error('Failed to copy:', err));
-  };
-
+  // Handle tab change
   const handleTabChange = (event, newValue) => {
-    setTabValue(newValue);
+    setActiveTab(newValue);
   };
-
+  
+  // Handle avatar change
   const handleAvatarChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -191,27 +63,28 @@ const GroupSettings = ({ open, group, onClose, onUpdate, onDelete }) => {
       setAvatarPreview(URL.createObjectURL(file));
     }
   };
-
-  const handleUpdateGroup = async () => {
-    if (!groupName.trim() || !group?._id) return;
-    
+  
+  // Save group settings
+  const handleSave = async () => {
     try {
-      setLoading(true);
+      setIsLoading(true);
+      setError('');
+      setSuccess('');
       
       const formData = new FormData();
-      formData.append('name', groupName);
-      formData.append('description', groupDescription);
+      formData.append('name', name);
+      formData.append('description', description);
+      
+      // Add settings
+      formData.append('settings[who_can_send_messages]', whoCanSendMessages);
+      formData.append('settings[who_can_add_members]', whoCanAddMembers);
       
       if (avatar) {
         formData.append('avatar', avatar);
+      } else if (avatarPreview) {
+        formData.append('avatar', avatarPreview);
       }
       
-      // Add settings
-      if (isAdmin) {
-        formData.append('settings[who_can_send_messages]', messageSettings);
-        formData.append('settings[who_can_add_members]', memberSettings);
-      }
-
       const response = await axios.put(
         `http://localhost:5000/api/group/${group._id}`,
         formData,
@@ -222,590 +95,365 @@ const GroupSettings = ({ open, group, onClose, onUpdate, onDelete }) => {
           }
         }
       );
-
+      
       if (response.data && response.data.status === 'success') {
-        setEditMode(false);
+        setSuccess('Group settings updated successfully');
+        
+        // Update group data in parent component
         if (onUpdate) {
           onUpdate(response.data.data);
         }
       }
     } catch (error) {
-      console.error('Error updating group:', error);
-      alert('Failed to update group. Please try again.');
+      console.error('Error updating group settings:', error);
+      setError(error.response?.data?.message || 'Failed to update group settings');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
-
+  
+  // Delete group
   const handleDeleteGroup = async () => {
-    if (!group?._id || !isAdmin) return;
-    
-    if (window.confirm('Are you sure you want to delete this group? This action cannot be undone.')) {
-      try {
-        setLoading(true);
-        const response = await axios.delete(
-          `http://localhost:5000/api/group/${group._id}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-
-        if (response.data && response.data.status === 'success') {
-          if (onDelete) {
-            onDelete(group._id);
-          }
-          onClose();
-        }
-      } catch (error) {
-        console.error('Error deleting group:', error);
-        alert('Failed to delete group. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
-
-  const handleSearch = async () => {
-    if (!searchQuery.trim() || !group?._id) return;
-    
     try {
-      setSearchLoading(true);
-      const res = await axios.get(
-        `http://localhost:5000/api/user/search?query=${searchQuery}`,
+      setIsLoading(true);
+      
+      const response = await axios.delete(
+        `http://localhost:5000/api/group/${group._id}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
-      if (res.data && res.data.data) {
-        // Filter out users who are already members
-        const memberIds = group.members.map(m => m.user._id);
-        const filteredResults = res.data.data.filter(
-          user => !memberIds.includes(user._id)
-        );
-        setSearchResults(filteredResults);
-      }
-    } catch (error) {
-      console.error('Error searching users:', error);
-    } finally {
-      setSearchLoading(false);
-    }
-  };
-
-  const addMember = async (userId) => {
-    try {
-      setSearchLoading(true);
-      const response = await axios.post(
-        'http://localhost:5000/api/group/member/add',
-        {
-          groupId: group._id,
-          memberId: userId
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
       if (response.data && response.data.status === 'success') {
-        // Remove user from search results
-        setSearchResults(searchResults.filter(user => user._id !== userId));
-        // Update group data with new member
-        if (onUpdate) {
-          onUpdate(response.data.data);
+        // Notify parent component
+        if (onDelete) {
+          onDelete(group._id);
         }
+        
+        // Close dialog
+        onClose();
       }
     } catch (error) {
-      console.error('Error adding member:', error);
-      alert('Failed to add member. Please try again.');
+      console.error('Error deleting group:', error);
+      setError(error.response?.data?.message || 'Failed to delete group');
     } finally {
-      setSearchLoading(false);
+      setIsLoading(false);
+      setIsDeleteDialogOpen(false);
     }
   };
-
-  const removeMember = async (memberId) => {
-    if (!group?._id) return;
-    
+  
+  // Leave group (remove self from group)
+  const handleLeaveGroup = async () => {
     try {
+      setIsLoading(true);
+      
       const response = await axios.post(
         'http://localhost:5000/api/group/member/remove',
         {
           groupId: group._id,
-          memberId
+          memberId: currentUser._id // Remove self
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-
+      
       if (response.data && response.data.status === 'success') {
-        // Update group data with member removed
-        if (onUpdate) {
-          onUpdate(response.data.data);
+        // Notify parent component
+        if (onDelete) {
+          onDelete(group._id);
         }
+        
+        // Close dialog
+        onClose();
       }
     } catch (error) {
-      console.error('Error removing member:', error);
-      alert('Failed to remove member. Please try again.');
+      console.error('Error leaving group:', error);
+      setError(error.response?.data?.message || 'Failed to leave group');
     } finally {
-      setMemberActionAnchorEl(null);
-      setSelectedMember(null);
+      setIsLoading(false);
     }
   };
 
-  const changeRole = async (memberId, newRole) => {
-    if (!group?._id || !isAdmin) return;
-    
+  // Handle member role change
+  const handleMemberRoleChange = async (memberId, newRole) => {
     try {
-      const response = await axios.put(
+      setIsLoading(true);
+      
+      console.log('Changing role for member:', memberId, 'to', newRole);
+      console.log('Group ID:', group._id);
+      
+      const response = await axios.post(
         'http://localhost:5000/api/group/member/role',
         {
           groupId: group._id,
-          memberId,
+          memberId: memberId,
           role: newRole
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-
+      
       if (response.data && response.data.status === 'success') {
-        // Update group data with role changed
+        setSuccess('Vai trò thành viên đã được cập nhật');
+        
+        // Update group data
         if (onUpdate) {
-          onUpdate(response.data.data);
+          // Update members in the group object
+          const updatedGroup = { ...group };
+          updatedGroup.members = updatedGroup.members.map(m => {
+            const id = typeof m.user === 'object' ? m.user._id : m.user;
+            if (id === memberId) {
+              return { ...m, role: newRole };
+            }
+            return m;
+          });
+          onUpdate(updatedGroup);
         }
       }
     } catch (error) {
-      console.error('Error changing role:', error);
-      alert('Failed to change role. Please try again.');
+      console.error('Error updating member role:', error);
+      setError(error.response?.data?.message || 'Lỗi khi cập nhật vai trò thành viên');
     } finally {
-      setMemberActionAnchorEl(null);
-      setSelectedMember(null);
+      setIsLoading(false);
     }
   };
 
-  const handleMemberMenu = (event, member) => {
-    setMemberActionAnchorEl(event.currentTarget);
-    setSelectedMember(member);
-  };
-
-  const handleMemberMenuClose = () => {
-    setMemberActionAnchorEl(null);
-    setSelectedMember(null);
-  };
-
-  // Handle search input with debounce
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      const delaySearch = setTimeout(() => {
-        handleSearch();
-      }, 500);
-      
-      return () => clearTimeout(delaySearch);
-    } else {
-      setSearchResults([]);
-    }
-  }, [searchQuery]);
-
-  // Update settings
-  const updateSettings = async () => {
-    if (!group?._id || !isAdmin) return;
-    
+  // Handle member removal
+  const handleRemoveMember = async (memberId) => {
     try {
-      setSettingsLoading(true);
-      const response = await axios.put(
-        `http://localhost:5000/api/group/${group._id}`,
+      setIsLoading(true);
+      
+      console.log('Removing member:', memberId);
+      console.log('Group ID:', group._id);
+      
+      const response = await axios.post(
+        'http://localhost:5000/api/group/member/remove',
         {
-          settings: {
-            who_can_send_messages: messageSettings,
-            who_can_add_members: memberSettings
-          }
+          groupId: group._id,
+          memberId: memberId
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-
+      
       if (response.data && response.data.status === 'success') {
+        setSuccess('Thành viên đã được xóa khỏi nhóm');
+        
+        // Update group data
         if (onUpdate) {
-          onUpdate(response.data.data);
+          // Filter out the removed member
+          const updatedGroup = { ...group };
+          updatedGroup.members = updatedGroup.members.filter(m => {
+            const id = typeof m.user === 'object' ? m.user._id : m.user;
+            return id !== memberId;
+          });
+          onUpdate(updatedGroup);
         }
       }
     } catch (error) {
-      console.error('Error updating settings:', error);
-      alert('Failed to update settings. Please try again.');
+      console.error('Error removing member:', error);
+      setError(error.response?.data?.message || 'Lỗi khi xóa thành viên');
     } finally {
-      setSettingsLoading(false);
+      setIsLoading(false);
     }
   };
-
+  
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h6">Group Settings</Typography>
-        <IconButton onClick={onClose} size="small">
-          <Close />
-        </IconButton>
-      </DialogTitle>
+      <DialogTitle>Group Settings</DialogTitle>
       
-      <Tabs value={tabValue} onChange={handleTabChange} centered>
-        <Tab label="Info" />
-        <Tab label="Members" />
-        {isAdmin && <Tab label="Settings" />}
-        {(isAdmin || isModerator) && <Tab label="Invite" />}
-      </Tabs>
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 3 }}>
+        <Tabs value={activeTab} onChange={handleTabChange}>
+          <Tab label="General" />
+          <Tab label="Members" />
+        </Tabs>
+      </Box>
       
       <DialogContent>
-        {/* Info Tab */}
-        <TabPanel value={tabValue} index={0}>
-          <Box display="flex" flexDirection="column" alignItems="center" gap={2}>
-            <Box position="relative">
-              <Avatar
-                src={avatarPreview}
-                sx={{ width: 120, height: 120 }}
-              />
-              {editMode && (
-                <IconButton
-                  sx={{
-                    position: 'absolute',
-                    bottom: 0,
-                    right: 0,
-                    backgroundColor: 'primary.main',
-                    '&:hover': { backgroundColor: 'primary.dark' },
-                  }}
-                  component="label"
-                  size="small"
+        {/* General Settings Tab */}
+        {activeTab === 0 && (
+          <Box>
+            {/* Avatar */}
+            <Box display="flex" justifyContent="center" my={2}>
+              <Box position="relative">
+                <Avatar
+                  src={avatarPreview}
+                  alt={name}
+                  sx={{ width: 100, height: 100 }}
                 >
-                  <PhotoCamera fontSize="small" sx={{ color: 'white' }} />
-                  <input
-                    hidden
-                    accept="image/*"
-                    type="file"
-                    onChange={handleAvatarChange}
-                  />
-                </IconButton>
-              )}
-            </Box>
-            
-            {editMode ? (
-              <>
-                <TextField
-                  label="Group Name"
-                  fullWidth
-                  value={groupName}
-                  onChange={(e) => setGroupName(e.target.value)}
-                  required
-                />
-                <TextField
-                  label="Group Description"
-                  fullWidth
-                  multiline
-                  rows={3}
-                  value={groupDescription}
-                  onChange={(e) => setGroupDescription(e.target.value)}
-                />
-                <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-                  <Button 
-                    variant="outlined" 
-                    onClick={() => setEditMode(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button 
-                    variant="contained" 
-                    onClick={handleUpdateGroup}
-                    disabled={loading}
-                  >
-                    {loading ? <CircularProgress size={24} /> : "Save Changes"}
-                  </Button>
-                </Box>
-              </>
-            ) : (
-              <>
-                <Typography variant="h5">{group?.name}</Typography>
-                <Typography variant="body1" color="text.secondary" align="center">
-                  {group?.description || 'No description'}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Created by: {group?.creator?.name || 'Unknown'}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Created: {new Date(group?.created_at).toLocaleDateString()}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Members: {group?.members?.length || 0}
-                </Typography>
+                  {!avatarPreview && <Group fontSize="large" />}
+                </Avatar>
                 
                 {isAdmin && (
-                  <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-                    <Button 
-                      variant="outlined" 
-                      startIcon={<Edit />}
-                      onClick={() => setEditMode(true)}
-                    >
-                      Edit
-                    </Button>
-                    <Button 
-                      variant="outlined" 
-                      color="error"
-                      startIcon={<Delete />}
-                      onClick={handleDeleteGroup}
-                    >
-                      Delete Group
-                    </Button>
-                  </Box>
+                  <IconButton
+                    aria-label="change avatar"
+                    component="label"
+                    sx={{
+                      position: 'absolute',
+                      bottom: 0,
+                      right: 0,
+                      backgroundColor: 'primary.main',
+                      color: 'white',
+                      '&:hover': {
+                        backgroundColor: 'primary.dark',
+                      },
+                    }}
+                    size="small"
+                  >
+                    <input
+                      hidden
+                      accept="image/*"
+                      type="file"
+                      onChange={handleAvatarChange}
+                    />
+                    <PhotoCamera fontSize="small" />
+                  </IconButton>
                 )}
-              </>
-            )}
-          </Box>
-        </TabPanel>
-        
-        {/* Members Tab */}
-        <TabPanel value={tabValue} index={1}>
-          <Box>
-            {(isAdmin || isModerator) && (
-              <Box mb={2}>
-                <Typography variant="subtitle1" gutterBottom>
-                  Add Members
+              </Box>
+            </Box>
+            
+            {/* Basic Info */}
+            <TextField
+              fullWidth
+              label="Group Name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              margin="normal"
+              disabled={!isAdmin}
+              required
+            />
+            
+            <TextField
+              fullWidth
+              label="Description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              margin="normal"
+              multiline
+              rows={3}
+              disabled={!isAdmin}
+            />
+            
+            {/* Permissions */}
+            {isAdmin && (
+              <Box mt={3}>
+                <Typography variant="h6" gutterBottom>
+                  Permissions
                 </Typography>
-                <TextField
-                  label="Search users to add"
-                  fullWidth
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  InputProps={{
-                    endAdornment: searchLoading ? <CircularProgress size={20} /> : null,
-                  }}
-                />
                 
-                {searchResults.length > 0 && (
-                  <Paper elevation={2} sx={{ mt: 1, maxHeight: 200, overflow: 'auto' }}>
-                    <List dense>
-                      {searchResults.map(user => (
-                        <ListItem
-                          key={user._id}
-                          secondaryAction={
-                            <Button 
-                              size="small" 
-                              startIcon={<PersonAdd />}
-                              onClick={() => addMember(user._id)}
-                            >
-                              Add
-                            </Button>
-                          }
-                        >
-                          <ListItemAvatar>
-                            <Avatar src={user.primary_avatar} />
-                          </ListItemAvatar>
-                          <ListItemText
-                            primary={user.name}
-                            secondary={user.email || user.phone}
-                          />
-                        </ListItem>
-                      ))}
-                    </List>
-                  </Paper>
-                )}
+                <FormControl component="fieldset" sx={{ mb: 2, width: '100%' }}>
+                  <FormLabel component="legend">Who can send messages</FormLabel>
+                  <RadioGroup
+                    value={whoCanSendMessages}
+                    onChange={(e) => setWhoCanSendMessages(e.target.value)}
+                  >
+                    <FormControlLabel value="all" control={<Radio />} label="Everyone" />
+                    <FormControlLabel value="admins_moderators" control={<Radio />} label="Admins & Moderators only" />
+                    <FormControlLabel value="admins" control={<Radio />} label="Admins only" />
+                  </RadioGroup>
+                </FormControl>
+                
+                <FormControl component="fieldset" sx={{ width: '100%' }}>
+                  <FormLabel component="legend">Who can add members</FormLabel>
+                  <RadioGroup
+                    value={whoCanAddMembers}
+                    onChange={(e) => setWhoCanAddMembers(e.target.value)}
+                  >
+                    <FormControlLabel value="all" control={<Radio />} label="Everyone" />
+                    <FormControlLabel value="admins_moderators" control={<Radio />} label="Admins & Moderators only" />
+                    <FormControlLabel value="admins" control={<Radio />} label="Admins only" />
+                  </RadioGroup>
+                </FormControl>
               </Box>
             )}
             
-            <Divider />
+            {/* Messages */}
+            {success && (
+              <Alert severity="success" sx={{ mt: 3 }}>
+                {success}
+              </Alert>
+            )}
             
-            <Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>
-              Members ({group?.members?.length || 0})
-            </Typography>
+            {error && (
+              <Alert severity="error" sx={{ mt: 3 }}>
+                {error}
+              </Alert>
+            )}
             
-            <List sx={{ maxHeight: 300, overflow: 'auto' }}>
-              {group?.members?.map(member => {
-                const isCurrentUser = member.user._id === currentUser._id;
-                const isCreator = member.user._id === group.creator._id;
-                
-                return (
-                  <ListItem
-                    key={member.user._id}
-                    secondaryAction={
-                      (isAdmin || (isModerator && member.role === 'member')) && !isCreator && !isCurrentUser ? (
-                        <IconButton edge="end" onClick={(e) => handleMemberMenu(e, member)}>
-                          <MoreVert />
-                        </IconButton>
-                      ) : null
-                    }
-                  >
-                    <ListItemAvatar>
-                      <Avatar src={member.user.primary_avatar} />
-                    </ListItemAvatar>
-                    <ListItemText
-                      primary={
-                        <Box component="span" display="flex" alignItems="center">
-                          {member.user.name}
-                          {isCreator && (
-                            <Typography variant="caption" color="primary" sx={{ ml: 1 }}>
-                              (Creator)
-                            </Typography>
-                          )}
-                          {isCurrentUser && (
-                            <Typography variant="caption" color="secondary" sx={{ ml: 1 }}>
-                              (You)
-                            </Typography>
-                          )}
-                        </Box>
-                      }
-                      secondary={
-                        <Typography variant="caption" color="text.secondary">
-                          {member.role.charAt(0).toUpperCase() + member.role.slice(1)} • 
-                          Joined {new Date(member.joined_at).toLocaleDateString()}
-                        </Typography>
-                      }
-                    />
-                  </ListItem>
-                );
-              })}
-            </List>
-          </Box>
-          
-          {/* Member Action Menu */}
-          <Menu
-            anchorEl={memberActionAnchorEl}
-            open={Boolean(memberActionAnchorEl)}
-            onClose={handleMemberMenuClose}
-          >
-            {isAdmin && selectedMember?.role !== 'admin' && (
-              <MenuItem onClick={() => changeRole(selectedMember.user._id, 'admin')}>
-                Make Admin
-              </MenuItem>
-            )}
-            {isAdmin && selectedMember?.role !== 'moderator' && (
-              <MenuItem onClick={() => changeRole(selectedMember.user._id, 'moderator')}>
-                Make Moderator
-              </MenuItem>
-            )}
-            {isAdmin && selectedMember?.role !== 'member' && (
-              <MenuItem onClick={() => changeRole(selectedMember.user._id, 'member')}>
-                Make Member
-              </MenuItem>
-            )}
-            <MenuItem 
-              onClick={() => removeMember(selectedMember.user._id)}
-              sx={{ color: 'error.main' }}
-            >
-              Remove from Group
-            </MenuItem>
-          </Menu>
-        </TabPanel>
-        
-        {/* Settings Tab */}
-        {isAdmin && (
-          <TabPanel value={tabValue} index={2}>
-            <Box display="flex" flexDirection="column" gap={3}>
-              <FormControl fullWidth>
-                <InputLabel>Who can send messages</InputLabel>
-                <Select
-                  value={messageSettings}
-                  label="Who can send messages"
-                  onChange={(e) => setMessageSettings(e.target.value)}
+            {/* Save Button */}
+            {isAdmin && (
+              <Box display="flex" justifyContent="flex-end" mt={3}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={isLoading ? <CircularProgress size={20} /> : <Save />}
+                  onClick={handleSave}
+                  disabled={isLoading || !name.trim()}
                 >
-                  <MenuItem value="all">All members</MenuItem>
-                  <MenuItem value="admins_moderators">Admins and moderators only</MenuItem>
-                  <MenuItem value="admins">Admins only</MenuItem>
-                </Select>
-              </FormControl>
+                  Save Changes
+                </Button>
+              </Box>
+            )}
+            
+            {/* Leave or Delete Group */}
+            <Box mt={4}>
+              <Divider sx={{ my: 2 }} />
               
-              <FormControl fullWidth>
-                <InputLabel>Who can add members</InputLabel>
-                <Select
-                  value={memberSettings}
-                  label="Who can add members"
-                  onChange={(e) => setMemberSettings(e.target.value)}
+              <Typography variant="h6" gutterBottom color="error">
+                {isAdmin ? 'Delete Group' : 'Leave Group'}
+              </Typography>
+              
+              <Typography variant="body2" gutterBottom color="textSecondary">
+                {isAdmin 
+                  ? 'Deleting the group will remove all members and conversations. This action cannot be undone.'
+                  : 'If you leave the group, you will need to be invited again to rejoin.'
+                }
+              </Typography>
+              
+              <Box display="flex" justifyContent="flex-start" mt={2}>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  onClick={isAdmin ? () => setIsDeleteDialogOpen(true) : handleLeaveGroup}
+                  disabled={isLoading}
+                  startIcon={isLoading ? <CircularProgress size={20} /> : <Delete />}
                 >
-                  <MenuItem value="all">All members</MenuItem>
-                  <MenuItem value="admins_moderators">Admins and moderators only</MenuItem>
-                  <MenuItem value="admins">Admins only</MenuItem>
-                </Select>
-              </FormControl>
-              
-              <Button
-                variant="contained"
-                onClick={updateSettings}
-                disabled={settingsLoading}
-              >
-                {settingsLoading ? <CircularProgress size={24} /> : "Save Settings"}
-              </Button>
+                  {isAdmin ? 'Delete Group' : 'Leave Group'}
+                </Button>
+              </Box>
             </Box>
-          </TabPanel>
+          </Box>
         )}
         
-        {/* Invite Tab */}
-        {(isAdmin || isModerator) && (
-          <TabPanel value={tabValue} index={3}>
-            <Box display="flex" flexDirection="column" gap={2}>
-              <Typography variant="subtitle1">
-                Share this link to invite people to the group
-              </Typography>
-              
-              <Paper
-                variant="outlined"
-                sx={{ 
-                  p: 2, 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'space-between',
-                  bgcolor: 'background.paper' 
-                }}
-              >
-                {inviteLinkLoading ? (
-                  <CircularProgress size={24} />
-                ) : (
-                  <>
-                    <Typography 
-                      variant="body2" 
-                      sx={{ 
-                        flex: 1, 
-                        overflow: 'hidden', 
-                        textOverflow: 'ellipsis',
-                        mr: 1
-                      }}
-                    >
-                      {inviteLink}
-                    </Typography>
-                    <Tooltip title={copied ? "Copied!" : "Copy to clipboard"}>
-                      <IconButton onClick={copyInviteLink}>
-                        <ContentCopy />
-                      </IconButton>
-                    </Tooltip>
-                  </>
-                )}
-              </Paper>
-              
-              {isAdmin && (
-                <Box display="flex" gap={2}>
-                  <Button
-                    variant="outlined"
-                    startIcon={<Refresh />}
-                    onClick={regenerateInviteLink}
-                    disabled={inviteLinkLoading}
-                  >
-                    Generate New Link
-                  </Button>
-                  
-                  <Button
-                    variant="outlined"
-                    color="warning"
-                    onClick={() => toggleInviteLinkStatus(false)}
-                    disabled={inviteLinkLoading}
-                  >
-                    Disable Link
-                  </Button>
-                  
-                  <Button
-                    variant="outlined"
-                    color="success"
-                    onClick={() => toggleInviteLinkStatus(true)}
-                    disabled={inviteLinkLoading}
-                  >
-                    Enable Link
-                  </Button>
-                </Box>
-              )}
-              
-              <Typography variant="caption" color="text.secondary">
-                Anyone with this link can join this group.
-                {isAdmin && " As an admin, you can generate a new link or disable the current one at any time."}
-              </Typography>
-            </Box>
-          </TabPanel>
+        {/* Members Tab */}
+        {activeTab === 1 && (
+          <ManageMembers 
+            group={group} 
+            onUpdate={onUpdate}
+            onRoleChange={handleMemberRoleChange}
+            onRemoveMember={handleRemoveMember}
+          />
         )}
       </DialogContent>
       
       <DialogActions>
         <Button onClick={onClose}>Close</Button>
       </DialogActions>
+      
+      {/* Confirm Delete Dialog */}
+      <Dialog open={isDeleteDialogOpen} onClose={() => setIsDeleteDialogOpen(false)}>
+        <DialogTitle>Confirm Delete</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete this group? This action cannot be undone and all conversations will be permanently lost.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setIsDeleteDialogOpen(false)}>Cancel</Button>
+          <Button 
+            onClick={handleDeleteGroup} 
+            color="error"
+            disabled={isLoading}
+          >
+            {isLoading ? <CircularProgress size={24} /> : 'Delete Group'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Dialog>
   );
 };

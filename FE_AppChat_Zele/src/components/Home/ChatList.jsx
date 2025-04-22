@@ -21,12 +21,14 @@ import {
     CircularProgress,
     IconButton,
     Tabs,
-    Tab
+    Tab,
+    Tooltip
 } from '@mui/material';
-import { Search as SearchIcon, Add as AddIcon } from '@mui/icons-material';
+import { Search as SearchIcon, Add as AddIcon, Link as LinkIcon } from '@mui/icons-material';
 import axios from 'axios';
 import socket from '../../socket/socket';
 import CreateGroupDialog from '../Group/CreateGroupDialog';
+import JoinGroupDialog from '../Group/JoinGroupDialog';
 
 const ChatList = ({ selectedFriend, setSelectedFriend }) => {
     const [searchId, setSearchId] = useState('');
@@ -41,6 +43,7 @@ const ChatList = ({ selectedFriend, setSelectedFriend }) => {
     const [groups, setGroups] = useState([]);
     const [groupsLoading, setGroupsLoading] = useState(false);
     const [createGroupOpen, setCreateGroupOpen] = useState(false);
+    const [joinGroupOpen, setJoinGroupOpen] = useState(false);
 
     const token = localStorage.getItem('accessToken');
     const rawUser = localStorage.getItem('user');
@@ -195,6 +198,19 @@ const ChatList = ({ selectedFriend, setSelectedFriend }) => {
     const handleCreateGroup = (newGroup) => {
         setCreateGroupOpen(false);
         loadGroups();
+    };
+
+    const handleJoinGroup = (group) => {
+        setJoinGroupOpen(false);
+        loadGroups();
+        if (group) {
+            setSelectedFriend({
+                ...group,
+                isGroup: true,
+                groupId: group._id,
+                conversationId: group.conversation_id
+            });
+        }
     };
 
     const handleSelectGroup = (group) => {
@@ -371,13 +387,26 @@ const ChatList = ({ selectedFriend, setSelectedFriend }) => {
                     }}
                 />
                 {tabValue === 1 && (
-                    <IconButton 
-                        color="primary" 
-                        sx={{ ml: 1 }}
-                        onClick={() => setCreateGroupOpen(true)}
-                    >
-                        <AddIcon />
-                    </IconButton>
+                    <Box display="flex">
+                        <Tooltip title="Create new group">
+                            <IconButton 
+                                color="primary" 
+                                sx={{ ml: 1 }}
+                                onClick={() => setCreateGroupOpen(true)}
+                            >
+                                <AddIcon />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Join group with invite link">
+                            <IconButton 
+                                color="secondary" 
+                                sx={{ ml: 0.5 }}
+                                onClick={() => setJoinGroupOpen(true)}
+                            >
+                                <LinkIcon />
+                            </IconButton>
+                        </Tooltip>
+                    </Box>
                 )}
             </Box>
 
@@ -558,6 +587,12 @@ const ChatList = ({ selectedFriend, setSelectedFriend }) => {
             <CreateGroupDialog 
                 open={createGroupOpen}
                 onClose={handleCreateGroup}
+            />
+            
+            <JoinGroupDialog
+                open={joinGroupOpen}
+                onClose={() => setJoinGroupOpen(false)}
+                onSuccess={handleJoinGroup}
             />
         </Box>
     );

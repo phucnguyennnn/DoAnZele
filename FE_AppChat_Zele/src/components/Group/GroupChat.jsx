@@ -20,7 +20,7 @@ import {
 } from '@mui/icons-material';
 import axios from 'axios';
 import socket from '../../socket/socket';
-import MessageInput from '../Messages/MessageInput';
+import MessageInput from '../../components/Home/MessageInput';
 import GroupChatHeader from './GroupChatHeader';
 
 const GroupChat = ({ group, onLeaveGroup }) => {
@@ -38,15 +38,46 @@ const GroupChat = ({ group, onLeaveGroup }) => {
     if (group?.conversationId) {
       loadMessages();
       
-      // Connect to socket.io and listen for messages
-      socket.on('receiveGroupMessage', (data) => {
-        if (data.conversationId === group.conversationId) {
-          setMessages(prev => [...prev, data.message]);
+      console.log('GroupChat: Setting up socket listeners for conversation:', group.conversationId);
+      
+      // Join the conversation room
+      socket.emit('joinConversation', group.conversationId);
+      
+      // Handlers for socket events
+      const handleGroupMessage = (data) => {
+        console.log('GroupChat: Received group message:', data);
+        
+        // Make sure we have the actual message object
+        let message = data.message || data;
+        
+        // Check if this message is for our conversation
+        if (!message.conversation_id && !message.conversationId) {
+          console.warn('GroupChat: Message without conversation ID received');
+          return;
+        }
+        
+        const msgConvoId = message.conversation_id || message.conversationId;
+        
+        if (msgConvoId === group.conversationId) {
+          setMessages(prev => {
+            // Check if message already exists
+            const exists = prev.some(m => m._id === message._id);
+            if (exists) return prev;
+            
+            const newMessages = [...prev, message];
+            return newMessages;
+          });
+          
           scrollToBottom();
         }
-      });
-
+      };
+      
+      // Listen for both event types
+      socket.on('receiveGroupMessage', handleGroupMessage);
+      socket.on('receiveMessage', handleGroupMessage);
+      
       socket.on('messageRevoked', (data) => {
+        console.log('GroupChat: Message revoked:', data);
         setMessages(prev => 
           prev.map(msg => 
             msg._id === data.messageId 
@@ -55,33 +86,51 @@ const GroupChat = ({ group, onLeaveGroup }) => {
           )
         );
       });
-
-      // Clean up on unmount
+      
+      // Clean up function
       return () => {
+        console.log('GroupChat: Cleaning up socket listeners');
         socket.off('receiveGroupMessage');
+        socket.off('receiveMessage');
         socket.off('messageRevoked');
+        socket.emit('leaveConversation', group.conversationId);
       };
     }
   }, [group?.conversationId]);
 
   const loadMessages = async () => {
-    if (!group?.conversationId) return;
+    if (!group?.conversationId) {
+      console.error('GroupChat: Cannot load messages - Missing conversation ID');
+      return;
+    }
     
     try {
       setLoading(true);
       setError(null);
       
+      console.log('GroupChat: Loading messages for conversation:', group.conversationId);
+      
       const response = await axios.get(
-        `http://localhost:5000/api/message/conversation/${group.conversationId}`,
+        `http://localhost:5000/api/message/getByConversation/${group.conversationId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
       if (response.data && response.data.status === 'success') {
+        console.log('GroupChat: Loaded messages:', response.data.data.length);
         setMessages(response.data.data);
         scrollToBottom(true);
+      } else {
+        console.warn('GroupChat: Unexpected response format while loading messages:', response.data);
       }
     } catch (error) {
-      console.error('Error loading messages:', error);
+      console.error('GroupChat: Error loading messages:', error);
+      
+      // Log detailed error information
+      if (error.response) {
+        console.error('Server response:', error.response.data);
+        console.error('Status code:', error.response.status);
+      }
+      
       setError('Failed to load messages. Please try again.');
     } finally {
       setLoading(false);
@@ -89,28 +138,43 @@ const GroupChat = ({ group, onLeaveGroup }) => {
   };
 
   const handleSendMessage = async (content, attachments) => {
-    if (!group?.conversationId || (!content.trim() && !attachments?.length)) return;
+    if (!group?.conversationId || (!content && (!attachments || !attachments.length))) {
+      console.error('Cannot send message: Missing conversation ID or content/attachments');
+      return;
+    }
     
     try {
+      console.log('GroupChat: Sending message to conversation:', group.conversationId);
+      console.log('GroupChat: Message content:', content);
+      console.log('GroupChat: Has attachments:', !!attachments?.length);
+      
       const formData = new FormData();
-      formData.append('message_type', 'text');
+      
+      // Add required fields
       formData.append('content', content);
       
+      // Handle file attachments
+      let messageType = 'text';
       if (attachments && attachments.length > 0) {
-        formData.append('file', attachments[0]);
-        if (attachments[0].type.startsWith('image/')) {
-          formData.append('message_type', 'image');
-        } else if (attachments[0].type.startsWith('video/')) {
-          formData.append('message_type', 'video');
-        } else if (attachments[0].type.includes('audio')) {
-          formData.append('message_type', 'voice');
+        const file = attachments[0];
+        formData.append('file', file);
+        
+        if (file.type.startsWith('image/')) {
+          messageType = 'image';
+        } else if (file.type.startsWith('video/')) {
+          messageType = 'video';
+        } else if (file.type.includes('audio')) {
+          messageType = 'voice';
         } else {
-          formData.append('message_type', 'file');
+          messageType = 'file';
         }
       }
       
+      formData.append('message_type', messageType);
+      
+      // Make the API call - use the right endpoint for the BE
       const response = await axios.post(
-        `http://localhost:5000/api/message/group/${group.conversationId}`,
+        `http://localhost:5000/api/message/send/group/${group.conversationId}`,
         formData,
         {
           headers: {
@@ -121,11 +185,27 @@ const GroupChat = ({ group, onLeaveGroup }) => {
       );
       
       if (response.data && response.data.status === 'success') {
-        // Message will be added via socket event
+        console.log('GroupChat: Message sent successfully:', response.data);
+        
+        // Optionally add the message immediately for better UX
+        const newMessage = response.data.data;
+        if (newMessage) {
+          setMessages(prev => [...prev, newMessage]);
+          scrollToBottom();
+        }
+      } else {
+        console.warn('GroupChat: Unexpected response format:', response.data);
       }
     } catch (error) {
-      console.error('Error sending message:', error);
-      alert('Failed to send message. Please try again.');
+      console.error('GroupChat: Error sending message:', error);
+      
+      // Log detailed error information
+      if (error.response) {
+        console.error('Server response:', error.response.data);
+        console.error('Status code:', error.response.status);
+      }
+      
+      throw error; // Let MessageInput handle the error
     }
   };
 
@@ -169,28 +249,18 @@ const GroupChat = ({ group, onLeaveGroup }) => {
         .catch(err => {
           console.error('Failed to copy text: ', err);
         });
+      handleMenuClose();
     }
-    handleMenuClose();
-  };
-
-  const scrollToBottom = (instant = false) => {
-    setTimeout(() => {
-      if (messagesEndRef.current) {
-        messagesEndRef.current.scrollIntoView({ 
-          behavior: instant ? 'auto' : 'smooth' 
-        });
-      }
-    }, 100);
-  };
-
-  const formatTime = (timestamp) => {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   const formatDate = (timestamp) => {
     const date = new Date(timestamp);
     return date.toLocaleDateString();
+  };
+
+  const formatTime = (timestamp) => {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   const isNewDay = (index, messages) => {
@@ -202,7 +272,6 @@ const GroupChat = ({ group, onLeaveGroup }) => {
     return currentDate !== prevDate;
   };
 
-  // Check if user can send messages based on group settings
   const canSendMessages = () => {
     if (!group || !currentUser) return false;
     
@@ -213,7 +282,6 @@ const GroupChat = ({ group, onLeaveGroup }) => {
     if (!userRole) return false;
     
     const sendMessagesSetting = group.settings?.who_can_send_messages || 'all';
-    
     if (sendMessagesSetting === 'all') return true;
     if (sendMessagesSetting === 'admins_moderators' && ['admin', 'moderator'].includes(userRole)) return true;
     if (sendMessagesSetting === 'admins' && userRole === 'admin') return true;
@@ -261,6 +329,14 @@ const GroupChat = ({ group, onLeaveGroup }) => {
       : message.sender_id;
     
     return senderId === currentUser._id;
+  };
+
+  const scrollToBottom = (instant = false) => {
+    if (messagesEndRef.current) {
+      setTimeout(() => {
+        messagesEndRef.current.scrollIntoView({ behavior: instant ? 'auto' : 'smooth' });
+      }, 100);
+    }
   };
 
   if (!group) {
@@ -313,14 +389,14 @@ const GroupChat = ({ group, onLeaveGroup }) => {
                 <React.Fragment key={message._id}>
                   {showDate && (
                     <Box 
+                      my={2}
                       display="flex" 
                       justifyContent="center" 
-                      my={2}
                     >
                       <Typography 
                         variant="caption" 
                         sx={{ 
-                          backgroundColor: 'rgba(0,0,0,0.1)', 
+                          backgroundColor: 'rgba(0,0,0,0.1)',  
                           px: 2, 
                           py: 0.5, 
                           borderRadius: 10 
@@ -396,8 +472,8 @@ const GroupChat = ({ group, onLeaveGroup }) => {
                                 component="span" 
                                 sx={{ 
                                   bgcolor: 'primary.main', 
-                                  color: 'white',
-                                  p: 1,
+                                  color: 'white', 
+                                  p: 1, 
                                   borderRadius: 1,
                                   mr: 1
                                 }}
@@ -423,19 +499,18 @@ const GroupChat = ({ group, onLeaveGroup }) => {
                           color="textSecondary"
                           sx={{ 
                             display: 'block', 
-                            mt: 0.5, 
                             textAlign: 'right',
-                            fontSize: '0.7rem'
+                            mt: 0.5, 
+                            fontSize: '0.7rem' 
                           }}
                         >
                           {formatTime(message.createdAt || message.timestamp)}
                         </Typography>
                       </Paper>
-                      
                       {isCurrentUserMessage && (
                         <IconButton 
                           size="small" 
-                          sx={{ ml: 0.5 }}
+                          sx={{ ml: 0.5 }} 
                           onClick={(e) => handleMessageMenu(e, message)}
                         >
                           <MoreVert fontSize="small" />
