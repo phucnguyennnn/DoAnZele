@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-    Box, Typography, Avatar, IconButton
+    Box, Typography, Avatar, IconButton, CircularProgress, Divider
 } from '@mui/material';
 import {
-    Search as SearchIcon, MoreVert as MoreVertIcon, ArrowBack as ArrowBackIcon
+    Search as SearchIcon, MoreVert as MoreVertIcon, ArrowBack as ArrowBackIcon,
+    Group as GroupIcon, Settings as SettingsIcon
 } from '@mui/icons-material';
 import axios from 'axios';
 import MessageBubble from './MessageBubble';
@@ -21,6 +22,7 @@ import {
     emitMessage
 } from '../../socket/socket';
 import socket from '../../socket/socket';
+import GroupSettings from '../Group/GroupSettings';
 
 const ChatWindow = ({ selectedFriend, setSelectedFriend }) => {
     const [messages, setMessages] = useState([]);
@@ -28,11 +30,18 @@ const ChatWindow = ({ selectedFriend, setSelectedFriend }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [isTyping, setIsTyping] = useState(false);
     const [readStatus, setReadStatus] = useState({});
+    const [groupData, setGroupData] = useState(null);
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    const [onlineMembers, setOnlineMembers] = useState([]);
+    
     const token = localStorage.getItem('accessToken');
     const user = JSON.parse(localStorage.getItem('user'));
     const userId = user?._id;
     const messagesEndRef = useRef(null);
     const typingTimeoutRef = useRef(null);
+
+    // Determine if this is a group chat
+    const isGroupChat = selectedFriend?.isGroup || false;
 
     const fetchMessages = async (convoId) => {
         try {
@@ -52,6 +61,50 @@ const ChatWindow = ({ selectedFriend, setSelectedFriend }) => {
         } finally {
             setIsLoading(false);
         }
+    };
+
+    // Fetch group details if it's a group chat
+    const fetchGroupDetails = async (groupId) => {
+        if (!groupId) return;
+        
+        try {
+            setIsLoading(true);
+            const response = await axios.get(
+                `http://localhost:5000/api/group/${groupId}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            
+            if (response.data && response.data.status === 'success') {
+                setGroupData(response.data.data);
+                
+                // Set conversation ID from the group data
+                if (response.data.data.conversation_id) {
+                    setConversationId(response.data.data.conversation_id);
+                }
+                
+                // Update online members count
+                updateOnlineMembers(response.data.data.members);
+            }
+        } catch (error) {
+            console.error('Error loading group details:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+    // Update online members based on currently online users
+    const updateOnlineMembers = (members) => {
+        if (!members) return;
+        
+        const onlineIds = [];
+        members.forEach(member => {
+            const memberId = member.user._id || member.user;
+            if (socket.onlineUsers && socket.onlineUsers.includes(memberId)) {
+                onlineIds.push(memberId);
+            }
+        });
+        
+        setOnlineMembers(onlineIds);
     };
 
     // Auto-scroll to bottom with improved behavior
@@ -92,14 +145,44 @@ const ChatWindow = ({ selectedFriend, setSelectedFriend }) => {
             }
         });
         
+        // Listen for group messages
+        socket.on('receiveGroupMessage', (data) => {
+            if (isGroupChat && data.conversationId === conversationId) {
+                fetchMessages(conversationId);
+            }
+        });
+        
+        // Listen for group updates
+        socket.on('groupInfoUpdated', (data) => {
+            if (isGroupChat && selectedFriend?.groupId === data.groupId) {
+                fetchGroupDetails(selectedFriend.groupId);
+            }
+        });
+        
+        // Listen for online users updates
+        socket.on('onlineUsers', (onlineUsersList) => {
+            if (groupData) {
+                updateOnlineMembers(groupData.members);
+            }
+        });
+        
         return () => {
             socket.off('receiveMessage');
+            socket.off('receiveGroupMessage');
+            socket.off('groupInfoUpdated');
+            socket.off('onlineUsers');
         };
-    }, [selectedFriend, conversationId]);
+    }, [selectedFriend, conversationId, isGroupChat, groupData]);
 
     // Extract fetchConversationId to its own function to be reusable
     const fetchConversationId = async () => {
         if (!selectedFriend) return;
+        
+        // If it's a group and we already have the conversation ID from the group data
+        if (isGroupChat && selectedFriend.conversationId) {
+            setConversationId(selectedFriend.conversationId);
+            return;
+        }
         
         try {
             setIsLoading(true);
@@ -126,12 +209,24 @@ const ChatWindow = ({ selectedFriend, setSelectedFriend }) => {
         }
     };
 
-    // Fetch conversation ID when selected friend changes
+    // Setup logic when selected friend changes
     useEffect(() => {
-        if (selectedFriend) {
+        if (!selectedFriend) return;
+        
+        if (isGroupChat) {
+            // It's a group chat
+            fetchGroupDetails(selectedFriend.groupId);
+        } else {
+            // It's an individual chat
             fetchConversationId();
         }
-    }, [selectedFriend]);
+        
+        // Reset states
+        setMessages([]);
+        setIsTyping(false);
+        setReadStatus({});
+        
+    }, [selectedFriend, isGroupChat]);
 
     // Socket event handling for the current conversation
     useEffect(() => {
@@ -166,7 +261,10 @@ const ChatWindow = ({ selectedFriend, setSelectedFriend }) => {
                 (newMsg.senderId === selectedFriend?._id) ||
                 (newMsg.receiver_id?._id === userId || newMsg.receiverId === userId);
                 
-            if (isSenderOrReceiver || msgConversationId === conversationId) {
+            // For group messages, check if conversation ID matches
+            const isGroupMessage = isGroupChat && (msgConversationId === conversationId);
+                
+            if (isSenderOrReceiver || isGroupMessage || msgConversationId === conversationId) {
                 // Normalize message format to ensure consistent display
                 const formattedMsg = normalizeMessageFormat(newMsg);
 
@@ -229,7 +327,7 @@ const ChatWindow = ({ selectedFriend, setSelectedFriend }) => {
             unsubscribeFromMessages(handleReceiveMessage);
             unsubscribeFromTyping(handleTypingIndicator);
         };
-    }, [conversationId, selectedFriend?._id, userId]);
+    }, [conversationId, selectedFriend?._id, userId, isGroupChat]);
 
     // Normalize message format to ensure consistent structure
     const normalizeMessageFormat = (message) => {
@@ -285,6 +383,47 @@ const ChatWindow = ({ selectedFriend, setSelectedFriend }) => {
         }
     }, [conversationId]);
 
+    // Get the name of a message sender in group chat
+    const getSenderName = (senderId) => {
+        if (!groupData || !senderId) return 'Unknown';
+        
+        const member = groupData.members.find(m => 
+            (m.user._id ? m.user._id === senderId : m.user === senderId)
+        );
+        
+        return member?.user?.name || 'Unknown User';
+    };
+    
+    // Get the avatar of a message sender in group chat
+    const getSenderAvatar = (senderId) => {
+        if (!groupData || !senderId) return '';
+        
+        const member = groupData.members.find(m => 
+            (m.user._id ? m.user._id === senderId : m.user === senderId)
+        );
+        
+        return member?.user?.primary_avatar || '';
+    };
+    
+    // Check if a user can send messages in this group
+    const canSendMessages = () => {
+        if (!isGroupChat || !groupData) return true;
+        
+        const userRole = groupData.members.find(m => 
+            (m.user._id ? m.user._id === userId : m.user === userId)
+        )?.role;
+        
+        if (!userRole) return false;
+        
+        const sendMessagesSetting = groupData.settings?.who_can_send_messages || 'all';
+        
+        if (sendMessagesSetting === 'all') return true;
+        if (sendMessagesSetting === 'admins_moderators' && ['admin', 'moderator'].includes(userRole)) return true;
+        if (sendMessagesSetting === 'admins' && userRole === 'admin') return true;
+        
+        return false;
+    };
+
     // Send a new message - cải thiện xử lý real-time
     const sendMessage = (message) => {
         if (!conversationId) {
@@ -321,18 +460,35 @@ const ChatWindow = ({ selectedFriend, setSelectedFriend }) => {
             messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
         }, 50);
         
-        // Send message via socket với đầy đủ thông tin
-        emitMessage({
-            ...message,
-            tempId,
-            conversationId,
-            senderId: userId,
-            sender_id: userId,  // Thêm cả dạng snake_case
-            participants: [userId, selectedFriend._id],
-            timestamp, // Thêm timestamp
-            createdAt: timestamp, // Thêm createdAt
-            message_type: 'text'  // Đảm bảo có message_type
-        });
+        // Send message via socket with appropriate data
+        if (isGroupChat) {
+            // For group messages
+            emitMessage({
+                ...message,
+                tempId,
+                conversationId,
+                senderId: userId,
+                sender_id: userId,
+                timestamp,
+                createdAt: timestamp,
+                message_type: 'text',
+                isGroupMessage: true,
+                groupId: selectedFriend.groupId
+            });
+        } else {
+            // For individual messages
+            emitMessage({
+                ...message,
+                tempId,
+                conversationId,
+                senderId: userId,
+                sender_id: userId,
+                participants: [userId, selectedFriend._id],
+                timestamp,
+                createdAt: timestamp,
+                message_type: 'text'
+            });
+        }
         
         // Clear typing indicator
         handleStopTyping();
@@ -362,50 +518,150 @@ const ChatWindow = ({ selectedFriend, setSelectedFriend }) => {
     const handleBackClick = () => {
         setSelectedFriend(null);
     };
+    
+    // Handle opening group settings
+    const handleOpenSettings = () => {
+        setSettingsOpen(true);
+    };
+    
+    // Handle group settings updates
+    const handleGroupUpdate = (updatedGroup) => {
+        setGroupData(updatedGroup);
+    };
+    
+    // Handle leaving or deleting group
+    const handleLeaveGroup = () => {
+        setSelectedFriend(null);
+    };
 
-    return (
-        <Box flex={1} display="flex" flexDirection="column">
-            {/* Header */}
-            <Box p={1.5} bgcolor="white" display="flex" alignItems="center" borderBottom="1px solid #e5e5e5">
-                <IconButton sx={{ display: { sm: 'none' }, mr: 1 }} onClick={handleBackClick}>
-                    <ArrowBackIcon />
-                </IconButton>
-                <Avatar src={selectedFriend?.avatar || ''} sx={{ mr: 2 }} />
-                <Box flex={1}>
-                    <Typography fontWeight="bold">{selectedFriend?.name || 'Tên người dùng'}</Typography>
-                    <Typography variant="caption" color="textSecondary">
-                        {isTyping ? 'Đang nhập...' : (selectedFriend?.online ? 'Online' : 'Offline')}
-                    </Typography>
+    // Render the header differently for group vs individual chat
+    const renderHeader = () => {
+        if (isGroupChat) {
+            return (
+                <Box p={1.5} bgcolor="white" display="flex" alignItems="center" borderBottom="1px solid #e5e5e5">
+                    <IconButton sx={{ display: { sm: 'none' }, mr: 1 }} onClick={handleBackClick}>
+                        <ArrowBackIcon />
+                    </IconButton>
+                    <Avatar src={groupData?.avatar || selectedFriend?.avatar || ''} sx={{ mr: 2 }}>
+                        {!groupData?.avatar && !selectedFriend?.avatar && <GroupIcon />}
+                    </Avatar>
+                    <Box flex={1}>
+                        <Typography fontWeight="bold">{groupData?.name || selectedFriend?.name || 'Group'}</Typography>
+                        <Typography variant="caption" color="textSecondary">
+                            {groupData ? `${groupData.members.length} members • ${onlineMembers.length} online` : 'Loading...'}
+                        </Typography>
+                    </Box>
+                    <IconButton onClick={handleOpenSettings}><SettingsIcon /></IconButton>
+                    <IconButton><MoreVertIcon /></IconButton>
                 </Box>
-                <IconButton><SearchIcon /></IconButton>
-                <IconButton><MoreVertIcon /></IconButton>
-            </Box>
-
-            {/* Message area */}
-            <Box flex={1} p={2} overflow="auto" bgcolor="#e5efff"
-                sx={{
-                    backgroundImage: 'url(https://zalo.zadn.vn/web/assets/img/background-chat.7d3e1e8b.png)',
-                    backgroundSize: 'cover'
-                }}
-            >
-                {isLoading ? (
-                    <Typography align="center" py={2}>Đang tải tin nhắn...</Typography>
-                ) : messages.length > 0 ? (
-                    messages.map((msg) => (
+            );
+        } else {
+            return (
+                <Box p={1.5} bgcolor="white" display="flex" alignItems="center" borderBottom="1px solid #e5e5e5">
+                    <IconButton sx={{ display: { sm: 'none' }, mr: 1 }} onClick={handleBackClick}>
+                        <ArrowBackIcon />
+                    </IconButton>
+                    <Avatar src={selectedFriend?.avatar || ''} sx={{ mr: 2 }} />
+                    <Box flex={1}>
+                        <Typography fontWeight="bold">{selectedFriend?.name || 'Tên người dùng'}</Typography>
+                        <Typography variant="caption" color="textSecondary">
+                            {isTyping ? 'Đang nhập...' : (selectedFriend?.online ? 'Online' : 'Offline')}
+                        </Typography>
+                    </Box>
+                    <IconButton><SearchIcon /></IconButton>
+                    <IconButton><MoreVertIcon /></IconButton>
+                </Box>
+            );
+        }
+    };
+    
+    // Render messages differently for group vs individual chat
+    const renderMessages = () => {
+        if (isLoading) {
+            return <Box display="flex" justifyContent="center" py={4}><CircularProgress /></Box>;
+        }
+        
+        if (messages.length === 0) {
+            return (
+                <Typography variant="body2" color="textSecondary" align="center" my={4}>
+                    Chưa có tin nhắn nào. Bắt đầu cuộc trò chuyện ngay!
+                </Typography>
+            );
+        }
+        
+        if (isGroupChat) {
+            // Group chat messages with user names
+            return messages.map((msg) => {
+                const isCurrentUser = msg.sender_id._id === userId;
+                const senderName = isCurrentUser ? 'You' : getSenderName(msg.sender_id._id);
+                const senderAvatar = getSenderAvatar(msg.sender_id._id);
+                
+                return (
+                    <Box 
+                        key={msg._id}
+                        alignSelf={isCurrentUser ? 'flex-end' : 'flex-start'} 
+                        mb={1.5}
+                        maxWidth="70%"
+                    >
+                        {!isCurrentUser && (
+                            <Box display="flex" alignItems="center" mb={0.5}>
+                                <Avatar src={senderAvatar} sx={{ width: 24, height: 24, mr: 1 }} />
+                                <Typography variant="caption" color="textSecondary">
+                                    {senderName}
+                                </Typography>
+                            </Box>
+                        )}
+                        
                         <MessageBubble
-                            key={msg._id}
                             sender={msg.sender_id._id}
                             content={msg.content}
                             time={new Date(msg.timestamp).toLocaleTimeString()}
                             userId={userId}
                             isRead={readStatus[msg._id]?.includes(selectedFriend._id)}
+                            messageType={msg.message_type}
+                            fileUrl={msg.file_meta?.url}
+                            fileName={msg.file_meta?.name}
+                            isRevoked={msg.is_revoked}
                         />
-                    ))
-                ) : (
-                    <Typography variant="body2" color="textSecondary" align="center">
-                        Chưa có tin nhắn nào. Bắt đầu cuộc trò chuyện ngay!
-                    </Typography>
-                )}
+                    </Box>
+                );
+            });
+        } else {
+            // Individual chat messages
+            return messages.map((msg) => (
+                <MessageBubble
+                    key={msg._id}
+                    sender={msg.sender_id._id}
+                    content={msg.content}
+                    time={new Date(msg.timestamp).toLocaleTimeString()}
+                    userId={userId}
+                    isRead={readStatus[msg._id]?.includes(selectedFriend._id)}
+                    messageType={msg.message_type}
+                    fileUrl={msg.file_meta?.url}
+                    fileName={msg.file_meta?.name}
+                    isRevoked={msg.is_revoked}
+                />
+            ));
+        }
+    };
+
+    return (
+        <Box flex={1} display="flex" flexDirection="column">
+            {/* Header */}
+            {renderHeader()}
+
+            {/* Message area */}
+            <Box 
+                flex={1} 
+                p={2} 
+                overflow="auto" 
+                bgcolor="#e5efff"
+                sx={{
+                    backgroundImage: 'url(https://zalo.zadn.vn/web/assets/img/background-chat.7d3e1e8b.png)',
+                    backgroundSize: 'cover'
+                }}
+            >
+                {renderMessages()}
                 <div ref={messagesEndRef} />
             </Box>
 
@@ -416,8 +672,20 @@ const ChatWindow = ({ selectedFriend, setSelectedFriend }) => {
                 onMessageSent={sendMessage}
                 onTypingStarted={handleStartTyping}
                 onTypingStopped={handleStopTyping}
-                disabled={!conversationId || isLoading}
+                disabled={!conversationId || isLoading || (isGroupChat && !canSendMessages())}
+                disabledMessage={isGroupChat && !canSendMessages() ? "You don't have permission to send messages in this group" : ""}
             />
+            
+            {/* Group Settings Dialog */}
+            {isGroupChat && groupData && (
+                <GroupSettings
+                    open={settingsOpen}
+                    group={groupData}
+                    onClose={() => setSettingsOpen(false)}
+                    onUpdate={handleGroupUpdate}
+                    onDelete={handleLeaveGroup}
+                />
+            )}
         </Box>
     );
 };
