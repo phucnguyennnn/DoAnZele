@@ -50,6 +50,37 @@ const CreateGroupDialog = ({ open, onClose }) => {
     
     try {
       setLoading(true);
+      
+      // First try to search by email/phone
+      try {
+        const directResponse = await axios.get(
+          `http://localhost:5000/api/user/getUser?email=${searchQuery.trim()}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        
+        if (directResponse.data && directResponse.data.data) {
+          const foundUser = directResponse.data.data;
+          
+          // Check if user is current user or already selected
+          if (foundUser._id === currentUser._id) {
+            console.log("Cannot add yourself to the group");
+            return;
+          }
+          
+          if (selectedMembers.some(member => member._id === foundUser._id)) {
+            console.log("User already selected");
+            return;
+          }
+          
+          setSearchResults([foundUser]);
+          return; // Exit if found by email/phone
+        }
+      } catch (error) {
+        // If direct search fails, continue to general search
+        console.log("Not found by email/phone, trying general search");
+      }
+      
+      // Fall back to general search
       const res = await axios.get(
         `http://localhost:5000/api/user/search?query=${searchQuery}`,
         { headers: { Authorization: `Bearer ${token}` } }
@@ -228,7 +259,8 @@ const CreateGroupDialog = ({ open, onClose }) => {
           {/* Search for members */}
           <Box mt={2}>
             <TextField
-              label="Search users to add"
+              label="Search by phone number or email"
+              placeholder="Enter phone number or email to add users"
               fullWidth
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}

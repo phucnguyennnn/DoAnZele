@@ -120,30 +120,74 @@ const ManageMembers = ({ group, onUpdate }) => {
     
     try {
       setIsSearching(true);
-      const response = await axios.get(
-        `http://localhost:5000/api/user/search?query=${searchQuery}`,
+      
+      // First try to search by email
+      try {
+        const response = await axios.get(
+          `http://localhost:5000/api/user/getUser?email=${searchQuery.trim()}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        
+        if (response.data && response.data.data) {
+          // Check if user is already a member
+          const memberIds = members.map(m => 
+            typeof m.user === 'object' ? m.user._id : m.user
+          );
+          
+          const foundUser = response.data.data;
+          
+          if (!memberIds.includes(foundUser._id)) {
+            setSearchResults([foundUser]);
+          } else {
+            setSnackbar({
+              open: true,
+              message: 'User is already a member of this group',
+              severity: 'info'
+            });
+            setSearchResults([]);
+          }
+          return; // Exit if found by email
+        }
+      } catch (error) {
+        // If email search fails, continue to general search
+        console.log("Not found by email, trying general search");
+      }
+      
+      // Fall back to general search
+      const generalSearchResponse = await axios.get(
+        `http://localhost:5000/api/user/search?query=${searchQuery.trim()}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
-      if (response.data && response.data.status === 'success') {
+      if (generalSearchResponse.data && generalSearchResponse.data.status === 'success') {
         // Filter out users who are already members
         const memberIds = members.map(m => 
           typeof m.user === 'object' ? m.user._id : m.user
         );
         
-        const filteredResults = response.data.data.filter(
+        const filteredResults = generalSearchResponse.data.data.filter(
           user => !memberIds.includes(user._id)
         );
         
-        setSearchResults(filteredResults);
+        if (filteredResults.length > 0) {
+          setSearchResults(filteredResults);
+        } else {
+          setSnackbar({
+            open: true,
+            message: 'No users found or all users are already members',
+            severity: 'info'
+          });
+          setSearchResults([]);
+        }
       }
     } catch (error) {
       console.error('Error searching users:', error);
       setSnackbar({
         open: true,
-        message: 'Error searching for users',
+        message: 'User not found with this email or phone number',
         severity: 'error'
       });
+      setSearchResults([]);
     } finally {
       setIsSearching(false);
     }
@@ -203,21 +247,40 @@ const ManageMembers = ({ group, onUpdate }) => {
   // Close member options menu
   const handleCloseMenu = () => {
     setAnchorEl(null);
-    setSelectedMember(null);
   };
 
   // Handle role change
   const handleRoleChange = async (newRole) => {
-    if (!selectedMember) return;
+    if (!selectedMember) {
+      console.error("No member selected for role change");
+      setSnackbar({
+        open: true,
+        message: 'Failed to identify member to change role',
+        severity: 'error'
+      });
+      setRoleDialogOpen(false);
+      return;
+    }
 
     try {
-      setIsGeneratingLink(true); // Sử dụng trạng thái loading
+      setIsGeneratingLink(true);
 
-      const memberId = typeof selectedMember.user === 'object' 
-        ? selectedMember.user._id 
-        : selectedMember.user;
+      // Extract member ID properly by checking its type
+      let memberId;
+      if (typeof selectedMember.user === 'object') {
+        // If user is an object, get its _id
+        memberId = selectedMember.user._id;
+      } else {
+        // If user is already an ID string
+        memberId = selectedMember.user;
+      }
 
-console.log('Changing role for member:', memberId, 'to', newRole);
+      // Validate that we have a valid ID
+      if (!memberId) {
+        throw new Error('Cannot identify member to change role');
+      }
+
+      console.log('Changing role for member:', memberId, 'to', newRole);
       console.log('Group ID:', group._id);
       
       const response = await axios.put(
@@ -233,13 +296,16 @@ console.log('Changing role for member:', memberId, 'to', newRole);
       console.log('Role change response:', response.data);
 
       if (response.data && response.data.status === 'success') {
+        // Get member name for success message
+        const memberName = getUserName(selectedMember.user);
+        
         setSnackbar({
           open: true,
-          message: `Role changed to ${newRole} successfully`,
+          message: `${memberName}'s role changed to ${newRole} successfully`,
           severity: 'success'
         });
 
-// Update local state
+        // Update local state
         const updatedMembers = members.map(m => {
           const currentId = typeof m.user === 'object' ? m.user._id : m.user;
           return currentId === memberId ? { ...m, role: newRole } : m;
@@ -249,8 +315,11 @@ console.log('Changing role for member:', memberId, 'to', newRole);
         if (onUpdate) {
           onUpdate({ ...group, members: updatedMembers });
         }
+      } else {
+        throw new Error(response.data.message || 'Failed to change role');
       }
     } catch (error) {
+      console.error('Error changing role:', error);
       setSnackbar({
         open: true,
         message: error.response?.data?.message || 'Error changing role',
@@ -259,6 +328,7 @@ console.log('Changing role for member:', memberId, 'to', newRole);
     } finally {
       setRoleDialogOpen(false);
       handleCloseMenu();
+      setSelectedMember(null);
       setIsGeneratingLink(false);
     }
   };
@@ -266,11 +336,13 @@ console.log('Changing role for member:', memberId, 'to', newRole);
   // Remove member from group
   const handleRemoveMember = async () => {
     if (!selectedMember) {
+      console.error("No member selected for removal");
       setSnackbar({
         open: true,
-        message: 'No member selected to remove',
+        message: 'Failed to identify member to remove',
         severity: 'error'
       });
+      setConfirmDialogOpen(false);
       return;
     }
 
@@ -339,6 +411,7 @@ console.log('Changing role for member:', memberId, 'to', newRole);
     } finally {
       setConfirmDialogOpen(false);
       handleCloseMenu();
+      setSelectedMember(null);
       setIsGeneratingLink(false);
     }
   };
@@ -506,31 +579,42 @@ console.log('Changing role for member:', memberId, 'to', newRole);
         <MenuItem onClick={() => {
           setConfirmAction('remove');
           setConfirmDialogOpen(true);
-          handleCloseMenu();
+          setAnchorEl(null);
         }}>
           Remove from group
         </MenuItem>
       </Menu>
 
       {/* Confirm dialog for removing member */}
-      <Dialog open={confirmDialogOpen} onClose={() => setConfirmDialogOpen(false)}>
+      <Dialog 
+        open={confirmDialogOpen} 
+        onClose={() => {
+          setConfirmDialogOpen(false);
+        }}
+      >
         <DialogTitle>Xác nhận</DialogTitle>
         <DialogContent>
           <Typography>
-            {confirmAction === 'remove' 
-              ? `Bạn có chắc chắn muốn xóa ${selectedMember ? getUserName(selectedMember.user) : ''} khỏi nhóm không?`
+            {confirmAction === 'remove' && selectedMember
+              ? `Bạn có chắc chắn muốn xóa ${getUserName(selectedMember.user)} khỏi nhóm không?`
               : 'Bạn có chắc chắn muốn thực hiện hành động này?'
             }
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmDialogOpen(false)} disabled={isGeneratingLink}>
+          <Button 
+            onClick={() => {
+              setConfirmDialogOpen(false);
+              setSelectedMember(null);
+            }} 
+            disabled={isGeneratingLink}
+          >
             Hủy
           </Button>
           <Button 
             color="error" 
             onClick={handleRemoveMember}
-            disabled={isGeneratingLink}
+            disabled={isGeneratingLink || !selectedMember}
           >
             {isGeneratingLink ? <CircularProgress size={20} /> : 'Xác nhận'}
           </Button>
@@ -581,7 +665,7 @@ console.log('Changing role for member:', memberId, 'to', newRole);
             <TextField
               fullWidth
               variant="outlined"
-              placeholder="Search by name or email"
+              placeholder="Search by email or phone number"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
